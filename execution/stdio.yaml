@@ -1,79 +1,77 @@
 ---
-task: stdio-execution
-config:
-  platform: linux
-  image_resource:
-    type: registry-image
-    source:
-      repository: busybox
-  inputs:
-    - name: submission
-    - name: compilation-output
-    - name: assignment-assets
-  outputs:
-    - name: execution-results
-  params:
-    EXECUTION_BINARY: ((execution_binary))
-    EXECUTION_FLAGS: ((execution_flags))
-    TEST_CASE_ID: ((test_case_id))
-    INPUT_PATH: ((input_path))
-    OUTPUT_PATH: ((output_path))
-    STDERR_PATH: ((stderr_path))
-  run:
-    path: sh
-    args:
-      - -c
-      - |
-        echo "=== Executing with stdio capture ==="
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: busybox
+inputs:
+  - name: submission
+  - name: compilation-output
+  - name: assignment-assets
+outputs:
+  - name: execution-results
+params:
+  EXECUTION_BINARY: ((execution_binary))
+  EXECUTION_FLAGS: ((execution_flags))
+  TEST_CASE_ID: ((test_case_id))
+  INPUT_PATH: ((input_path))
+  OUTPUT_PATH: ((output_path))
+  STDERR_PATH: ((stderr_path))
+run:
+  path: sh
+  args:
+    - -c
+    - |
+      echo "=== Executing with stdio capture ==="
 
-        # Display execution parameters
+      # Display execution parameters
+      echo ""
+      echo "Execution parameters:"
+      echo "  Binary/Command: ${EXECUTION_BINARY}"
+      echo "  Flags: ${EXECUTION_FLAGS}"
+      echo "  Test Case ID: ${TEST_CASE_ID}"
+      echo "  Output: ${OUTPUT_PATH}"
+      echo "  Stderr: ${STDERR_PATH}"
+
+      # Create output directory
+      mkdir -p execution-results
+
+      # Check if input file exists - FAIL if not found
+      if [ ! -f "${INPUT_PATH}" ]; then
         echo ""
-        echo "Execution parameters:"
-        echo "  Binary/Command: ${EXECUTION_BINARY}"
-        echo "  Flags: ${EXECUTION_FLAGS}"
-        echo "  Test Case ID: ${TEST_CASE_ID}"
-        echo "  Output: ${OUTPUT_PATH}"
-        echo "  Stderr: ${STDERR_PATH}"
+        echo "ERROR: Required test case input ${INPUT_PATH} not found"
+        echo "Test case ${TEST_CASE_ID} does not exist in assignment-assets"
+        exit 1
+      fi
 
-        # Create output directory
-        mkdir -p execution-results
+      # Execute the program with I/O redirection
+      echo ""
+      echo "Executing: ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < ${INPUT_PATH}"
+      echo ""
 
-        # Check if input file exists - FAIL if not found
-        if [ ! -f "${INPUT_PATH}" ]; then
-          echo ""
-          echo "ERROR: Required test case input ${INPUT_PATH} not found"
-          echo "Test case ${TEST_CASE_ID} does not exist in assignment-assets"
-          exit 1
-        fi
+      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "execution-results/${OUTPUT_PATH}" 2> "execution-results/${STDERR_PATH}"
+      EXIT_CODE=$?
 
-        # Execute the program with I/O redirection
+      # Save exit code
+      echo ${EXIT_CODE} > execution-results/exit_code.txt
+
+      # Display results summary
+      echo ""
+      echo "Execution completed with exit code: ${EXIT_CODE}"
+      echo ""
+      echo "Output files created:"
+      ls -la execution-results/
+
+      # Show output preview (first 20 lines)
+      echo ""
+      echo "=== Output Preview (stdout) ==="
+      head -n 20 "execution-results/${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
+
+      if [ -s "execution-results/${STDERR_PATH}" ]; then
         echo ""
-        echo "Executing: ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < ${INPUT_PATH}"
-        echo ""
+        echo "=== Error Output (stderr) ==="
+        head -n 20 "execution-results/${STDERR_PATH}"
+      fi
 
-        ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "execution-results/${OUTPUT_PATH}" 2> "execution-results/${STDERR_PATH}"
-        EXIT_CODE=$?
-
-        # Save exit code
-        echo ${EXIT_CODE} > execution-results/exit_code.txt
-
-        # Display results summary
-        echo ""
-        echo "Execution completed with exit code: ${EXIT_CODE}"
-        echo ""
-        echo "Output files created:"
-        ls -la execution-results/
-
-        # Show output preview (first 20 lines)
-        echo ""
-        echo "=== Output Preview (stdout) ==="
-        head -n 20 "execution-results/${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
-
-        if [ -s "execution-results/${STDERR_PATH}" ]; then
-          echo ""
-          echo "=== Error Output (stderr) ==="
-          head -n 20 "execution-results/${STDERR_PATH}"
-        fi
-
-        # Exit with the same code as the executed program
-        exit ${EXIT_CODE}
+      # Exit with the same code as the executed program
+      exit ${EXIT_CODE}
