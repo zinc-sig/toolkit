@@ -9,11 +9,10 @@ inputs:
   - name: compilation-output
   - name: assignment-assets
 outputs:
-  - name: execution-results
+  - name: execution-output
 params:
   EXECUTION_BINARY: ((execution_binary))
   EXECUTION_FLAGS: ((execution_flags))
-  TEST_CASE_ID: ((test_case_id))
   INPUT_PATH: ((input_path))
   OUTPUT_PATH: ((output_path))
   STDERR_PATH: ((stderr_path))
@@ -29,18 +28,16 @@ run:
       echo "Execution parameters:"
       echo "  Binary/Command: ${EXECUTION_BINARY}"
       echo "  Flags: ${EXECUTION_FLAGS}"
-      echo "  Test Case ID: ${TEST_CASE_ID}"
       echo "  Output: ${OUTPUT_PATH}"
       echo "  Stderr: ${STDERR_PATH}"
 
       # Create output directory
-      mkdir -p execution-results
+      mkdir -p execution-output
 
       # Check if input file exists - FAIL if not found
       if [ ! -f "${INPUT_PATH}" ]; then
         echo ""
         echo "ERROR: Required test case input ${INPUT_PATH} not found"
-        echo "Test case ${TEST_CASE_ID} does not exist in assignment-assets"
         exit 1
       fi
 
@@ -49,28 +46,28 @@ run:
       echo "Executing: ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < ${INPUT_PATH}"
       echo ""
 
-      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "execution-results/${OUTPUT_PATH}" 2> "execution-results/${STDERR_PATH}"
+      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "execution-output/${OUTPUT_PATH}" 2> "execution-output/${STDERR_PATH}"
       EXIT_CODE=$?
 
       # Save exit code
-      echo ${EXIT_CODE} > execution-results/exit_code.txt
+      echo ${EXIT_CODE} > execution-output/exit_code.txt
 
       # Display results summary
       echo ""
       echo "Execution completed with exit code: ${EXIT_CODE}"
       echo ""
       echo "Output files created:"
-      ls -la execution-results/
+      ls -la execution-output/
 
       # Show output preview (first 20 lines)
       echo ""
       echo "=== Output Preview (stdout) ==="
-      head -n 20 "execution-results/${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
+      head -n 20 "execution-output/${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
 
-      if [ -s "execution-results/${STDERR_PATH}" ]; then
+      if [ -s "execution-output/${STDERR_PATH}" ]; then
         echo ""
         echo "=== Error Output (stderr) ==="
-        head -n 20 "execution-results/${STDERR_PATH}"
+        head -n 20 "execution-output/${STDERR_PATH}"
       fi
 
       # Exit with the same code as the executed program
