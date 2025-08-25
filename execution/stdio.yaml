@@ -14,8 +14,9 @@ params:
   EXECUTION_BINARY: ((execution_binary))
   EXECUTION_FLAGS: ((execution_flags))
   INPUT_PATH: ((input_path))
-  OUTPUT_PATH: ((output_path))
-  STDERR_PATH: ((stderr_path))
+  OUTPUT_PATH: execution-output/((output_path))
+  STDERR_PATH: execution-output/((stderr_path))
+  EXIT_CODE_PATH: execution-output/((exit_code_path))
 run:
   path: sh
   args:
@@ -46,11 +47,11 @@ run:
       echo "Executing: ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < ${INPUT_PATH}"
       echo ""
 
-      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "execution-output/${OUTPUT_PATH}" 2> "execution-output/${STDERR_PATH}"
+      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "${OUTPUT_PATH}" 2> "${STDERR_PATH}"
       EXIT_CODE=$?
 
       # Save exit code
-      echo ${EXIT_CODE} > execution-output/exit_code.txt
+      echo ${EXIT_CODE} > "${EXIT_CODE_PATH}"
 
       # Display results summary
       echo ""
@@ -62,12 +63,12 @@ run:
       # Show output preview (first 20 lines)
       echo ""
       echo "=== Output Preview (stdout) ==="
-      head -n 20 "execution-output/${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
+      head -n 20 "${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
 
-      if [ -s "execution-output/${STDERR_PATH}" ]; then
+      if [ -s "${STDERR_PATH}" ]; then
         echo ""
         echo "=== Error Output (stderr) ==="
-        head -n 20 "execution-output/${STDERR_PATH}"
+        head -n 20 "${STDERR_PATH}"
       fi
 
       # Exit with the same code as the executed program
