@@ -71,5 +71,6 @@ run:
         head -n 20 "${STDERR_PATH}"
       fi
 
-      # Exit with the same code as the executed program
-      exit ${EXIT_CODE}
+      # Always exit successfully to allow pipeline to continue
+      # The actual program's exit code is saved in the exit code file
+      exit 0
