@@ -19,68 +19,21 @@ run:
   args:
     - '-c'
     - |
-      set -e
-
-      echo "=== Compiling submission ==="
-      echo "Source file: ${SOURCE_FILE}"
-      echo "Output binary: ${OUTPUT_BINARY}"
-      echo "Compiler flags: ${COMPILER_FLAGS}"
-      echo "Language: ${LANGUAGE}"
-
-      echo ""
-      echo "Contents of submission directory:"
-      ls -la submission/
-
-      # Copy helper files (including headers) if they exist
-      if [ -d "assignment-assets/helpers" ]; then
-        echo ""
-        echo "Available helper files:"
-        ls -la assignment-assets/helpers/
-        echo "Copying provided helper files and headers..."
-        cp assignment-assets/helpers/* submission/ 2>/dev/null || true
-      fi
-
       # Determine compiler based on language
       if [ "${LANGUAGE}" = "cpp" ] || [ "${LANGUAGE}" = "c++" ]; then
         COMPILER="g++"
-        echo "Using g++ for C++ compilation"
       else
         COMPILER="gcc"
-        echo "Using gcc for C compilation"
       fi
 
-      # Source file must be explicitly specified
-      SOURCE_PATH="submission/${SOURCE_FILE}"
+      # Compile with ghost
+      ghost run --verbose \
+        -i /dev/null \
+        -o compilation-output/compile.log \
+        -e compilation-output/compile.err \
+        -- ${COMPILER} ${COMPILER_FLAGS} "submission/${SOURCE_FILE}" -o "compilation-output/${OUTPUT_BINARY}"
 
-      if [ ! -f "${SOURCE_PATH}" ]; then
-        echo "ERROR: Source file ${SOURCE_FILE} not found in submission directory"
-        echo "Expected file at: ${SOURCE_PATH}"
-        exit 1
-      fi
-      echo "Found source file: ${SOURCE_PATH}"
-
-      # Create output directory if it doesn't exist
-      mkdir -p compilation-output
-
-      # Compile the code with access to helpers directory for includes
-      echo ""
-      echo "Compiling: ${COMPILER} ${COMPILER_FLAGS} ${SOURCE_PATH} -o compilation-output/${OUTPUT_BINARY}"
-      ${COMPILER} ${COMPILER_FLAGS} "${SOURCE_PATH}" -o "compilation-output/${OUTPUT_BINARY}" 2>&1 | tee compile.log
-
-      COMPILE_STATUS=${PIPESTATUS[0]}
-
-      if [ ${COMPILE_STATUS} -eq 0 ]; then
-        echo ""
-        echo "✓ Compilation successful!"
-        echo "Output binary: compilation-output/${OUTPUT_BINARY}"
+      # Make the binary executable if compilation succeeded
+      if [ $? -eq 0 ]; then
         chmod +x "compilation-output/${OUTPUT_BINARY}"
-        ls -la compilation-output/
-      else
-        echo ""
-        echo "✗ Compilation failed with exit code ${COMPILE_STATUS}"
-        echo "See compile.log for details"
-        exit ${COMPILE_STATUS}
       fi
-
-      # Copy compilation log to output
-      cp compile.log compilation-output/ 2>/dev/null || true

@@ -14,63 +14,15 @@ params:
   EXECUTION_BINARY: ((execution_binary))
   EXECUTION_FLAGS: ((execution_flags))
   INPUT_PATH: ((input_path))
-  OUTPUT_PATH: execution-output/((output_path))
-  STDERR_PATH: execution-output/((stderr_path))
-  EXIT_CODE_PATH: execution-output/((exit_code_path))
+  OUTPUT_PATH: ((output_path))
+  STDERR_PATH: ((stderr_path))
 run:
   path: sh
   args:
     - -c
     - |
-      echo "=== Executing with stdio capture ==="
-
-      # Display execution parameters
-      echo ""
-      echo "Execution parameters:"
-      echo "  Binary/Command: ${EXECUTION_BINARY}"
-      echo "  Flags: ${EXECUTION_FLAGS}"
-      echo "  Output: ${OUTPUT_PATH}"
-      echo "  Stderr: ${STDERR_PATH}"
-
-      # Create output directory
-      mkdir -p execution-output
-
-      # Check if input file exists - FAIL if not found
-      if [ ! -f "${INPUT_PATH}" ]; then
-        echo ""
-        echo "ERROR: Required test case input ${INPUT_PATH} not found"
-        exit 1
-      fi
-
-      # Execute the program with I/O redirection
-      echo ""
-      echo "Executing: ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < ${INPUT_PATH}"
-      echo ""
-
-      ${EXECUTION_BINARY} ${EXECUTION_FLAGS} < "${INPUT_PATH}" > "${OUTPUT_PATH}" 2> "${STDERR_PATH}"
-      EXIT_CODE=$?
-
-      # Save exit code
-      echo ${EXIT_CODE} > "${EXIT_CODE_PATH}"
-
-      # Display results summary
-      echo ""
-      echo "Execution completed with exit code: ${EXIT_CODE}"
-      echo ""
-      echo "Output files created:"
-      ls -la execution-output/
-
-      # Show output preview (first 20 lines)
-      echo ""
-      echo "=== Output Preview (stdout) ==="
-      head -n 20 "${OUTPUT_PATH}" 2>/dev/null || echo "(no output)"
-
-      if [ -s "${STDERR_PATH}" ]; then
-        echo ""
-        echo "=== Error Output (stderr) ==="
-        head -n 20 "${STDERR_PATH}"
-      fi
-
-      # Always exit successfully to allow pipeline to continue
-      # The actual program's exit code is saved in the exit code file
-      exit 0
+      ghost run --verbose \
+        -i "${INPUT_PATH}" \
+        -o "${OUTPUT_PATH}" \
+        -e "${STDERR_PATH}" \
+        -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}
