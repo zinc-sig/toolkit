@@ -4,9 +4,9 @@ description: Executes a compiled binary with standard input/output redirection
 parameters:
   - name: execution_binary
     type: string
-    description: Path to binary relative to compilation-output resource
-    default: main
-    example: main
+    description: Path to binary including resource name
+    default: compilation-output/main
+    example: compilation-output/main
   - name: execution_flags
     type: string
     description: Command line arguments passed to the binary
@@ -19,12 +19,12 @@ parameters:
     example: assignment-assets/test-1/input.txt
   - name: output_path
     type: string
-    description: Path to save stdout relative to execution-output resource
+    description: Path to save stdout including resource name
     default: execution-output/((.:scenario.code))/output.txt
     example: execution-output/test-1/output.txt
   - name: stderr_path
     type: string
-    description: Path to save stderr relative to execution-output resource
+    description: Path to save stderr including resource name
     default: execution-output/((.:scenario.code))/stderr.txt
     example: execution-output/test-1/stderr.txt
   - name: score

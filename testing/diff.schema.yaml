@@ -14,12 +14,12 @@ parameters:
     example: assignment-assets/test-1/expected.txt
   - name: output_path
     type: string
-    description: Path to save diff output relative to testing-output resource
+    description: Path to save diff output including resource name
     default: testing-output/((.:scenario.code))/diff.txt
     example: testing-output/test-1/diff.txt
   - name: stderr_path
     type: string
-    description: Path to save diff stderr relative to testing-output resource
+    description: Path to save diff stderr including resource name
     default: testing-output/((.:scenario.code))/diff.err
     example: testing-output/test-1/diff.err
   - name: score

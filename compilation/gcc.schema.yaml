@@ -4,14 +4,14 @@ description: Compiles C/C++ source files using GCC/G++ compiler
 parameters:
   - name: source_file
     type: string
-    description: Path to source file relative to submission resource
-    default: main.c
-    example: main.c
+    description: Path to source file including resource name
+    default: submission/main.c
+    example: submission/main.c
   - name: output_binary
     type: string
-    description: Output binary path relative to compilation-output resource
-    default: main
-    example: main
+    description: Output binary path including resource name
+    default: compilation-output/main
+    example: compilation-output/main
   - name: compiler_flags
     type: string
     description: Additional flags passed to the compiler
