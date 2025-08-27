@@ -1,0 +1,34 @@
+---
+name: Diff Comparison
+description: Compares actual output with expected output and assigns scores
+parameters:
+  - name: input_path
+    type: string
+    description: Path to actual output file
+    default: execution-output/((.:scenario.code))/output.txt
+    example: execution-output/test-1/output.txt
+  - name: expected_path
+    type: string
+    description: Path to expected output file
+    default: assignment-assets/((.:scenario.code))/expected.txt
+    example: assignment-assets/test-1/expected.txt
+  - name: output_path
+    type: string
+    description: Path to save diff output relative to testing-output resource
+    default: testing-output/((.:scenario.code))/diff.txt
+    example: testing-output/test-1/diff.txt
+  - name: stderr_path
+    type: string
+    description: Path to save diff stderr relative to testing-output resource
+    default: testing-output/((.:scenario.code))/diff.err
+    example: testing-output/test-1/diff.err
+  - name: score
+    type: string
+    description: Score to assign if files match exactly
+    default: "((.:scenario.score))"
+    example: "100"
+  - name: diff_flags
+    type: string
+    description: Flags passed to diff command
+    default: ""
+    example: "--ignore-trailing-space --ignore-blank-lines"

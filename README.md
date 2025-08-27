@@ -38,6 +38,7 @@ Tasks for running programs with various runtime environments:
 
 ### Testing (`/testing`)
 Tasks for validating outputs and generating results:
+- `diff.yaml`: File comparison with scoring support
 - `gtest.yaml`: Google Test framework for C++
 - `junit.yaml`: JUnit testing for Java
 - `pytest.yaml`: Python testing framework
@@ -84,6 +85,29 @@ stage "execution" {
 }
 ```
 
+## Task Schemas
+
+Each task has a `.schema.yaml` file documenting its parameters. These schemas provide:
+- Parameter descriptions and types
+- Default values
+- Example usage with templating
+- Support for Concourse's `((.:scenario.*))` templating syntax
+
+## Variable Templating
+
+Tasks support Concourse variable interpolation. For tasks executed with scenarios (matrix execution), these special variables are available:
+- `((.:scenario.code))` - The scenario identifier (e.g., "test-1", "test-2")
+- `((.:scenario.args))` - Custom 'args' parameter from the scenario
+- `((.:scenario.score))` - Custom 'score' parameter from the scenario
+- `((.:scenario.any_param))` - Any custom parameter defined in the scenario
+
+## Path Resolution
+
+**Important**: All paths in task parameters are relative to their respective input/output resources:
+- Input paths are relative to the input resource root (e.g., `submission/`, `assignment-assets/`, `compilation-output/`)
+- Output paths are relative to the output resource root (e.g., `compilation-output/`, `execution-output/`, `testing-output/`)
+- Ghost automatically creates parent directories for output files
+
 ## Task Structure
 
 Each task file follows the Concourse CI task specification:
@@ -118,6 +142,57 @@ run:
 4. **ghost**: Command runner (downloaded from GitHub releases)
 5. **compilation-output**: Results from compilation stage
 6. **execution-output**: Results from execution stage
+
+## Input/Output Resources by Task Type
+
+### Compilation Tasks
+**Inputs:**
+- `submission`: Student source code
+- `assignment-assets`: Header files, libraries, helper resources
+- `ghost`: Command runner binary
+
+**Outputs:**
+- `compilation-output`: Compiled binaries and compilation logs
+
+**Common Path Examples:**
+```yaml
+source_file: main.c                    # Reads from submission/main.c
+output_binary: main                     # Writes to compilation-output/main
+```
+
+### Execution Tasks
+**Inputs:**
+- `submission`: Original source code (if needed)
+- `compilation-output`: Compiled binaries from compilation stage
+- `assignment-assets`: Test input files
+- `ghost`: Command runner binary
+
+**Outputs:**
+- `execution-output`: Program outputs, stderr, and execution logs
+
+**Common Path Examples:**
+```yaml
+execution_binary: main                                          # Reads from compilation-output/main
+input_path: assignment-assets/((.:scenario.code))/input.txt   # Input file for test case
+output_path: execution-output/((.:scenario.code))/output.txt  # Stdout saved here
+stderr_path: execution-output/((.:scenario.code))/stderr.txt  # Stderr saved here
+```
+
+### Testing Tasks
+**Inputs:**
+- `execution-output`: Actual program outputs from execution stage
+- `assignment-assets`: Expected output files
+- `ghost`: Command runner binary
+
+**Outputs:**
+- `testing-output`: Test results, diff outputs, and scores
+
+**Common Path Examples:**
+```yaml
+input_path: execution-output/((.:scenario.code))/output.txt    # Actual output
+expected_path: assignment-assets/((.:scenario.code))/expected.txt  # Expected output
+output_path: testing-output/((.:scenario.code))/diff.txt      # Diff results
+```
 
 ## Pipeline Execution
 

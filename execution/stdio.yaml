@@ -17,6 +17,7 @@ params:
   INPUT_PATH: ((input_path))
   OUTPUT_PATH: ((output_path))
   STDERR_PATH: ((stderr_path))
+  SCORE: ((score))
 run:
   path: sh
   args:
@@ -29,4 +30,5 @@ run:
         -i "${INPUT_PATH}" \
         -o "${OUTPUT_PATH}" \
         -e "${STDERR_PATH}" \
+        --score "${SCORE}" \
         -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}

@@ -15,6 +15,7 @@ params:
   OUTPUT_BINARY: ((output_binary))
   COMPILER_FLAGS: ((compiler_flags))
   LANGUAGE: ((language))
+  SCORE: ((score))
 run:
   path: bash
   args:
@@ -22,7 +23,7 @@ run:
     - |
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
-      
+
       # Determine compiler based on language
       if [ "${LANGUAGE}" = "cpp" ] || [ "${LANGUAGE}" = "c++" ]; then
         COMPILER="g++"
@@ -35,9 +36,10 @@ run:
         -i /dev/null \
         -o compilation-output/compile.log \
         -e compilation-output/compile.err \
-        -- ${COMPILER} ${COMPILER_FLAGS} "submission/${SOURCE_FILE}" -o "compilation-output/${OUTPUT_BINARY}"
+        --score "${SCORE}" \
+        -- ${COMPILER} ${COMPILER_FLAGS} "${SOURCE_FILE}" -o "${OUTPUT_BINARY}"
 
       # Make the binary executable if compilation succeeded
       if [ $? -eq 0 ]; then
-        chmod +x "compilation-output/${OUTPUT_BINARY}"
+        chmod +x "${OUTPUT_BINARY}"
       fi
