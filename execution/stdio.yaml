@@ -8,6 +8,7 @@ inputs:
   - name: submission
   - name: compilation-output
   - name: assignment-assets
+  - name: ghost
 outputs:
   - name: execution-output
 params:
@@ -21,7 +22,10 @@ run:
   args:
     - -c
     - |
-      ghost run --verbose \
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+      
+      ./ghost/ghost-linux-amd64 run --verbose \
         -i "${INPUT_PATH}" \
         -o "${OUTPUT_PATH}" \
         -e "${STDERR_PATH}" \

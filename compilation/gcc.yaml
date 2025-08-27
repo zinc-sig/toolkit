@@ -7,6 +7,7 @@ image_resource:
 inputs:
   - name: submission
   - name: assignment-assets
+  - name: ghost
 outputs:
   - name: compilation-output
 params:
@@ -19,6 +20,9 @@ run:
   args:
     - '-c'
     - |
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+      
       # Determine compiler based on language
       if [ "${LANGUAGE}" = "cpp" ] || [ "${LANGUAGE}" = "c++" ]; then
         COMPILER="g++"
@@ -27,7 +31,7 @@ run:
       fi
 
       # Compile with ghost
-      ghost run --verbose \
+      ./ghost/ghost-linux-amd64 run --verbose \
         -i /dev/null \
         -o compilation-output/compile.log \
         -e compilation-output/compile.err \
