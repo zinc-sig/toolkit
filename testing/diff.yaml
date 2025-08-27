@@ -1,0 +1,34 @@
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: busybox
+inputs:
+  - name: execution-output
+  - name: assignment-assets
+  - name: ghost
+outputs:
+  - name: testing-output
+params:
+  INPUT_PATH: ((input_path))
+  EXPECTED_PATH: ((expected_path))
+  OUTPUT_PATH: ((output_path))
+  STDERR_PATH: ((stderr_path))
+  SCORE: ((score))
+  DIFF_FLAGS: ((diff_flags))
+run:
+  path: sh
+  args:
+    - -c
+    - |
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+      
+      # Run ghost diff command
+      ./ghost/ghost-linux-amd64 diff --verbose \
+        -i "${INPUT_PATH}" \
+        -x "${EXPECTED_PATH}" \
+        -o "${OUTPUT_PATH}" \
+        -e "${STDERR_PATH}" \
+        --score "${SCORE}" \
+        --diff-flags "${DIFF_FLAGS}"
