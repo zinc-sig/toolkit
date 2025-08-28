@@ -23,7 +23,7 @@ run:
     - |
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
-      
+
       # Run ghost diff command
       ./ghost/ghost-linux-amd64 diff --verbose \
         -i "${INPUT_PATH}" \

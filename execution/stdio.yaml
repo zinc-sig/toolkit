@@ -25,7 +25,7 @@ run:
     - |
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
-      
+
       ./ghost/ghost-linux-amd64 run --verbose \
         -i "${INPUT_PATH}" \
         -o "${OUTPUT_PATH}" \

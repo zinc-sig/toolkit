@@ -20,13 +20,13 @@ parameters:
   - name: output_path
     type: string
     description: Path to save stdout including resource name
-    default: execution-output/((.:scenario.code))/output.txt
-    example: execution-output/test-1/output.txt
+    default: execution-output/output.txt
+    example: execution-output/output.txt
   - name: stderr_path
     type: string
     description: Path to save stderr including resource name
-    default: execution-output/((.:scenario.code))/stderr.txt
-    example: execution-output/test-1/stderr.txt
+    default: execution-output/stderr.txt
+    example: execution-output/stderr.txt
   - name: score
     type: string
     description: Score to assign if execution succeeds (exit code 0)

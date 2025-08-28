@@ -5,8 +5,8 @@ parameters:
   - name: input_path
     type: string
     description: Path to actual output file
-    default: execution-output/((.:scenario.code))/output.txt
-    example: execution-output/test-1/output.txt
+    default: execution-output/output.txt
+    example: execution-output/output.txt
   - name: expected_path
     type: string
     description: Path to expected output file
@@ -15,13 +15,13 @@ parameters:
   - name: output_path
     type: string
     description: Path to save diff output including resource name
-    default: testing-output/((.:scenario.code))/diff.txt
-    example: testing-output/test-1/diff.txt
+    default: testing-output/diff.txt
+    example: testing-output/diff.txt
   - name: stderr_path
     type: string
     description: Path to save diff stderr including resource name
-    default: testing-output/((.:scenario.code))/diff.err
-    example: testing-output/test-1/diff.err
+    default: testing-output/diff.err
+    example: testing-output/diff.err
   - name: score
     type: string
     description: Score to assign if files match exactly

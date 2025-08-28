@@ -101,12 +101,17 @@ Tasks support Concourse variable interpolation. For tasks executed with scenario
 - `((.:scenario.score))` - Custom 'score' parameter from the scenario
 - `((.:scenario.any_param))` - Any custom parameter defined in the scenario
 
+**Important for per-scenario resources:** When using execution or testing tasks with scenarios, Concourse creates separate `execution-output` and `testing-output` resources for each scenario. This means:
+- Input paths from `assignment-assets` still need `((.:scenario.code))` to locate scenario-specific files
+- Output paths within `execution-output` and `testing-output` don't need `((.:scenario.code))` since the resource itself is already scenario-specific
+
 ## Path Resolution
 
 **Important**: All paths in task parameters are relative to their respective input/output resources:
 - Input paths are relative to the input resource root (e.g., `submission/`, `assignment-assets/`, `compilation-output/`)
 - Output paths are relative to the output resource root (e.g., `compilation-output/`, `execution-output/`, `testing-output/`)
 - Ghost automatically creates parent directories for output files
+- When using scenarios, `execution-output` and `testing-output` are created per scenario, eliminating the need for `((.:scenario.code))` in output paths within these resources
 
 ## Task Structure
 
@@ -141,7 +146,8 @@ run:
 3. **toolkit**: This repository (cloned via Git)
 4. **ghost**: Command runner (downloaded from GitHub releases)
 5. **compilation-output**: Results from compilation stage
-6. **execution-output**: Results from execution stage
+6. **execution-output**: Results from execution stage (per scenario)
+7. **testing-output**: Results from testing stage (per scenario)
 
 ## Input/Output Resources by Task Type
 
@@ -156,8 +162,8 @@ run:
 
 **Common Path Examples:**
 ```yaml
-source_file: main.c                    # Reads from submission/main.c
-output_binary: main                     # Writes to compilation-output/main
+source_file: submission/main.c          # Reads from submission/main.c
+output_binary: compilation-output/main  # Writes to compilation-output/main
 ```
 
 ### Execution Tasks
@@ -168,15 +174,17 @@ output_binary: main                     # Writes to compilation-output/main
 - `ghost`: Command runner binary
 
 **Outputs:**
-- `execution-output`: Program outputs, stderr, and execution logs
+- `execution-output`: Program outputs, stderr, and execution logs (one per scenario)
 
 **Common Path Examples:**
 ```yaml
-execution_binary: main                                          # Reads from compilation-output/main
+execution_binary: compilation-output/main                     # Reads from compilation-output/main
 input_path: assignment-assets/((.:scenario.code))/input.txt   # Input file for test case
-output_path: execution-output/((.:scenario.code))/output.txt  # Stdout saved here
-stderr_path: execution-output/((.:scenario.code))/stderr.txt  # Stderr saved here
+output_path: execution-output/output.txt                      # Stdout saved to scenario's execution-output
+stderr_path: execution-output/stderr.txt                      # Stderr saved to scenario's execution-output
 ```
+
+**Note:** Each scenario gets its own `execution-output` resource, so paths within the resource don't need to include `((.:scenario.code))`.
 
 ### Testing Tasks
 **Inputs:**
@@ -185,14 +193,16 @@ stderr_path: execution-output/((.:scenario.code))/stderr.txt  # Stderr saved her
 - `ghost`: Command runner binary
 
 **Outputs:**
-- `testing-output`: Test results, diff outputs, and scores
+- `testing-output`: Test results, diff outputs, and scores (one per scenario)
 
 **Common Path Examples:**
 ```yaml
-input_path: execution-output/((.:scenario.code))/output.txt    # Actual output
+input_path: execution-output/output.txt                            # Actual output from scenario's execution
 expected_path: assignment-assets/((.:scenario.code))/expected.txt  # Expected output
-output_path: testing-output/((.:scenario.code))/diff.txt      # Diff results
+output_path: testing-output/diff.txt                               # Diff results saved to scenario's testing-output
 ```
+
+**Note:** Each scenario gets its own `execution-output` and `testing-output` resources, so paths within these resources don't need to include `((.:scenario.code))`.
 
 ## Pipeline Execution
 
