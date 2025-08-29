@@ -9,9 +9,9 @@ parameters:
     example: submission/main.c
   - name: output_binary
     type: string
-    description: Output binary path including resource name
-    default: compilation-output/main
-    example: compilation-output/main
+    description: Output binary path relative to the output directory
+    default: main
+    example: main
   - name: compiler_flags
     type: string
     description: Additional flags passed to the compiler

@@ -19,14 +19,14 @@ parameters:
     example: assignment-assets/test-1/input.txt
   - name: output_path
     type: string
-    description: Path to save stdout including resource name
-    default: execution-output/output.txt
-    example: execution-output/output.txt
+    description: Path to save stdout relative to the output directory
+    default: output.txt
+    example: output.txt
   - name: stderr_path
     type: string
-    description: Path to save stderr including resource name
-    default: execution-output/stderr.txt
-    example: execution-output/stderr.txt
+    description: Path to save stderr relative to the output directory
+    default: stderr.txt
+    example: stderr.txt
   - name: score
     type: string
     description: Score to assign if execution succeeds (exit code 0)

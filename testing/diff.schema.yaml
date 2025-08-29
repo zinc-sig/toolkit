@@ -14,14 +14,14 @@ parameters:
     example: assignment-assets/test-1/expected.txt
   - name: output_path
     type: string
-    description: Path to save diff output including resource name
-    default: testing-output/diff.txt
-    example: testing-output/diff.txt
+    description: Path to save diff output relative to the output directory
+    default: diff.txt
+    example: diff.txt
   - name: stderr_path
     type: string
-    description: Path to save diff stderr including resource name
-    default: testing-output/diff.err
-    example: testing-output/diff.err
+    description: Path to save diff stderr relative to the output directory
+    default: diff.err
+    example: diff.err
   - name: score
     type: string
     description: Score to assign if files match exactly

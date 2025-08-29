@@ -25,10 +25,12 @@ run:
       chmod +x ghost/ghost-linux-amd64
 
       # Run ghost diff command
+      # Note: OUTPUT_PATH and STDERR_PATH should now be simple filenames or relative paths
+      # as they will be uploaded directly to the configured bucket location
       ./ghost/ghost-linux-amd64 diff --verbose \
         -i "${INPUT_PATH}" \
         -x "${EXPECTED_PATH}" \
-        -o "${OUTPUT_PATH}" \
-        -e "${STDERR_PATH}" \
+        -o "testing-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
+        -e "testing-output/${STDERR_PATH}:${STDERR_PATH}" \
         --score "${SCORE}" \
         --diff-flags "${DIFF_FLAGS}"

@@ -26,9 +26,11 @@ run:
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
 
+      # Note: OUTPUT_PATH and STDERR_PATH should now be simple filenames or relative paths
+      # as they will be uploaded directly to the configured bucket location
       ./ghost/ghost-linux-amd64 run --verbose \
         -i "${INPUT_PATH}" \
-        -o "${OUTPUT_PATH}" \
-        -e "${STDERR_PATH}" \
+        -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
+        -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \
         --score "${SCORE}" \
         -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}
