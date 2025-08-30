@@ -1,23 +1,21 @@
----
 platform: linux
 image_resource:
   type: registry-image
   source:
     repository: busybox
 inputs:
-  - name: submission
-  - name: compilation-output
+  - name: execution-output
   - name: assignment-assets
   - name: ghost
 outputs:
-  - name: execution-output
+  - name: testing-output
 params:
-  EXECUTION_BINARY: ((execution_binary))
-  EXECUTION_FLAGS: ((execution_flags))
   INPUT_PATH: ((input_path))
+  EXPECTED_PATH: ((expected_path))
   OUTPUT_PATH: ((output_path))
   STDERR_PATH: ((stderr_path))
   SCORE: ((score))
+  DIFF_FLAGS: ((diff_flags))
 run:
   path: sh
   args:
@@ -26,12 +24,14 @@ run:
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
 
+      # Run ghost diff command
       # Note: OUTPUT_PATH and STDERR_PATH should now be simple filenames or relative paths
       # as they will be uploaded directly to the configured bucket location
-      ./ghost/ghost-linux-amd64 run --verbose \
+      ./ghost/ghost-linux-amd64 diff --verbose \
         -i "${INPUT_PATH}" \
-        -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
-        -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \
+        -x "${EXPECTED_PATH}" \
+        -o "testing-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
+        -e "testing-output/${STDERR_PATH}:${STDERR_PATH}" \
         --score "${SCORE}" \
-        --upload-provider "minio" \
-        -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}
+        --diff-flags "${DIFF_FLAGS}" \
+        --upload-provider "minio"

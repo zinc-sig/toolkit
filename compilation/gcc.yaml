@@ -1,11 +1,42 @@
----
 platform: linux
-
 image_resource:
   type: registry-image
   source:
-    repository:
-
+    repository: gcc
+    tag: latest
+inputs:
+  - name: submission
+  - name: assignment-assets
+  - name: ghost
+outputs:
+  - name: compilation-output
+params:
+  SOURCE_FILE: ((source_file))
+  OUTPUT_BINARY: ((output_binary))
+  COMPILER_FLAGS: ((compiler_flags))
+  LANGUAGE: ((language))
+  SCORE: ((score))
 run:
-  path:
+  path: bash
   args:
+    - '-c'
+    - |
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+
+      # Determine compiler based on language
+      if [ "${LANGUAGE}" = "cpp" ] || [ "${LANGUAGE}" = "c++" ]; then
+        COMPILER="g++"
+      else
+        COMPILER="gcc"
+      fi
+
+      # Compile with ghost
+      ./ghost/ghost-linux-amd64 run --verbose \
+        -i /dev/null \
+        -o compile.log \
+        -e compile.err \
+        --score "${SCORE}" \
+        --upload-provider "minio" \
+        --upload-files "compilation-output/${OUTPUT_BINARY}:${OUTPUT_BINARY}" \
+        -- ${COMPILER} ${COMPILER_FLAGS} "${SOURCE_FILE}" -o "compilation-output/${OUTPUT_BINARY}"

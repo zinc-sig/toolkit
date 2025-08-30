@@ -1,0 +1,34 @@
+---
+name: Standard I/O Execution
+description: Executes a compiled binary with standard input/output redirection
+parameters:
+  - name: execution_binary
+    type: string
+    description: Path to binary including resource name
+    default: compilation-output/main
+    example: compilation-output/main
+  - name: execution_flags
+    type: string
+    description: Command line arguments passed to the binary
+    default: "((.:scenario.args))"
+    example: "--mode test --verbose"
+  - name: input_path
+    type: string
+    description: Path to input file for stdin
+    default: assignment-assets/((.:scenario.code))/input.txt
+    example: assignment-assets/test-1/input.txt
+  - name: output_path
+    type: string
+    description: Path to save stdout relative to the output directory
+    default: output.txt
+    example: output.txt
+  - name: stderr_path
+    type: string
+    description: Path to save stderr relative to the output directory
+    default: stderr.txt
+    example: stderr.txt
+  - name: score
+    type: string
+    description: Score to assign if execution succeeds (exit code 0)
+    default: "0"
+    example: "((.:scenario.score))"
