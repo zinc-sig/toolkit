@@ -57,7 +57,7 @@ The core grading system references these tasks in pipeline configurations:
 
 ```hcl
 stage "compilation" {
-  uses "toolkit/compilation/gcc" {
+  use "toolkit/compilation/gcc" {
     options = {
       source_file    = "main.c"
       output_binary  = "main"
@@ -69,15 +69,22 @@ stage "compilation" {
 
 stage "execution" {
   use "toolkit/execution/stdio" {
-    scenario "test-1" {
-      parameters = {
-        args = "test_input_1"
+    group "basic-tests" {
+      scenario "test-1" {
+        parameters = {
+          args = "test_input_1"
+        }
+      }
+      scenario "test-2" {
+        parameters = {
+          args = "test_input_2"
+        }
       }
     }
     options = {
       execution_binary = "compilation-output/main"
-      execution_flags  = "((.:scenario.args))"
-      input_path       = "assignment-assets/((.:scenario.code))/input.txt"
+      execution_flags  = "{{ .args }}"
+      input_path       = "assignment-assets/{{ .code }}/input.txt"
       output_path      = "output.txt"
       stderr_path      = "stderr.txt"
     }
@@ -91,18 +98,69 @@ Each task has a `.schema.yaml` file documenting its parameters. These schemas pr
 - Parameter descriptions and types
 - Default values
 - Example usage with templating
-- Support for Concourse's `((.:scenario.*))` templating syntax
+- Support for Go template syntax with scenario parameters
+
+## Group Structure and Scenarios
+
+Stages that need to run multiple test cases use a group-based structure. Groups organize related scenarios and can provide default parameters:
+
+```hcl
+stage "testing" {
+  use "toolkit/testing/diff" {
+    group "basic-tests" {
+      defaults {
+        parameters = {
+          score = "50"     # Default score for all scenarios in this group
+          timeout = "30"   # Default timeout
+        }
+      }
+      
+      scenario "test-1" {
+        parameters = {
+          # Inherits score=50 and timeout=30 from group defaults
+        }
+      }
+      
+      scenario "test-2" {
+        parameters = {
+          score = "100"    # Overrides the group default score
+          # Still inherits timeout=30
+        }
+      }
+    }
+    
+    options = {
+      input_path = "execution-output/output.txt"
+      expected_path = "assignment-assets/{{ .code }}/expected.txt"
+      score = "{{ .score }}"     # Uses the scenario's score parameter
+      timeout = "{{ .timeout }}"  # Uses the scenario's timeout parameter
+    }
+  }
+}
+```
+
+Key points about groups:
+- Scenarios must be organized within groups
+- Groups can have a `defaults` block with parameters that apply to all scenarios
+- Scenario-specific parameters override group defaults
+- Each scenario generates a separate parallel task execution
 
 ## Variable Templating
 
-Tasks support Concourse variable interpolation. For tasks executed with scenarios (matrix execution), these special variables are available:
-- `((.:scenario.code))` - The scenario identifier (e.g., "test-1", "test-2")
-- `((.:scenario.args))` - Custom 'args' parameter from the scenario
-- `((.:scenario.score))` - Custom 'score' parameter from the scenario
-- `((.:scenario.any_param))` - Any custom parameter defined in the scenario
+Tasks support Go template syntax for parameter interpolation. When stages are configured with groups and scenarios (matrix execution), the options can reference scenario parameters using Go template syntax:
+- `{{ .code }}` - The scenario identifier (e.g., "test-1", "test-2")
+- `{{ .group }}` - The group identifier (e.g., "basic-tests", "edge-cases")
+- `{{ .args }}` - Custom 'args' parameter from the scenario
+- `{{ .score }}` - Custom 'score' parameter from the scenario
+- `{{ .any_param }}` - Any custom parameter defined in the scenario
+
+The templating process:
+1. Group defaults are merged with scenario-specific parameters
+2. Go templates in the `options` section are evaluated with these parameters
+3. The evaluated values are passed to Concourse as static task variables
 
 **Important for output handling:** With the latest ghost integration, output files are directly uploaded to the configured storage location. This means:
-- Input paths from `assignment-assets` still need `((.:scenario.code))` to locate scenario-specific files
+- Input paths from `assignment-assets` still need `{{ .code }}` to locate scenario-specific files
 - Output paths are now relative to the output directory (no resource prefix needed)
 - Ghost handles uploading via environment variables configured by the system
 
@@ -179,10 +237,10 @@ output_binary: main  # Output binary relative to output directory
 
 **Common Path Examples:**
 ```yaml
-execution_binary: compilation-output/main                     # Reads from compilation-output/main
-input_path: assignment-assets/((.:scenario.code))/input.txt   # Input file for test case
-output_path: output.txt                                       # Stdout saved relative to output directory
-stderr_path: stderr.txt                                       # Stderr saved relative to output directory
+execution_binary: compilation-output/main           # Reads from compilation-output/main
+input_path: assignment-assets/{{ .code }}/input.txt # Input file for test case
+output_path: output.txt                             # Stdout saved relative to output directory
+stderr_path: stderr.txt                             # Stderr saved relative to output directory
 ```
 
 **Note:** Output paths are relative to the output directory. Ghost handles uploading to the correct location based on environment configuration.
@@ -198,9 +256,9 @@ stderr_path: stderr.txt                                       # Stderr saved rel
 
 **Common Path Examples:**
 ```yaml
-input_path: execution-output/output.txt                            # Actual output from scenario's execution
-expected_path: assignment-assets/((.:scenario.code))/expected.txt  # Expected output
-output_path: diff.txt                                              # Diff results saved relative to output directory
+input_path: execution-output/output.txt                  # Actual output from scenario's execution
+expected_path: assignment-assets/{{ .code }}/expected.txt # Expected output
+output_path: diff.txt                                    # Diff results saved relative to output directory
 ```
 
 **Note:** Output paths are relative to the output directory. Ghost handles uploading to the correct location based on environment configuration.
