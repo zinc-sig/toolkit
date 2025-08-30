@@ -33,4 +33,5 @@ run:
         -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
         -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \
         --score "${SCORE}" \
+        --upload-provider "minio" \
         -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}

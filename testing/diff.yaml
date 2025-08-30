@@ -33,4 +33,5 @@ run:
         -o "testing-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
         -e "testing-output/${STDERR_PATH}:${STDERR_PATH}" \
         --score "${SCORE}" \
-        --diff-flags "${DIFF_FLAGS}"
+        --diff-flags "${DIFF_FLAGS}" \
+        --upload-provider "minio"

@@ -37,5 +37,6 @@ run:
         -o compile.log \
         -e compile.err \
         --score "${SCORE}" \
+        --upload-provider "minio" \
         --upload-files "compilation-output/${OUTPUT_BINARY}:${OUTPUT_BINARY}" \
         -- ${COMPILER} ${COMPILER_FLAGS} "${SOURCE_FILE}" -o "compilation-output/${OUTPUT_BINARY}"
