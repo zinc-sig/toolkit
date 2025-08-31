@@ -15,7 +15,6 @@ params:
   OUTPUT_BINARY: ((output_binary))
   COMPILER_FLAGS: ((compiler_flags))
   LANGUAGE: ((language))
-  VERSION: ((version))
   SCORE: ((score))
 run:
   path: bash

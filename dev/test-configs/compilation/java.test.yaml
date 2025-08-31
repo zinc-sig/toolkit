@@ -34,12 +34,15 @@ task_parameters:
   output_name: "app.jar"
   classpath: ""
   compiler_flags: "-Xlint:all"
+  repository: "openjdk"
+  version: "17"
+  variant: "jdk"
   score: "10"
 
 verification:
   image:
     repository: openjdk
-    tag: 11-jdk
+    tag: 17-jdk
   script: |
     echo "Checking Java compilation output..."
     if [ -f compilation-output/app.jar ]; then
@@ -118,3 +121,27 @@ variants:
     task_parameters:
       classpath: "assignment-assets/lib/*"
       compiler_flags: "-Xlint:all -encoding UTF-8"
+  
+  - name: "java-21"
+    description: "Test with Java 21"
+    task_parameters:
+      repository: "openjdk"
+      version: "21"
+      variant: "jdk"
+      compiler_flags: "-Xlint:all --enable-preview --release 21"
+  
+  - name: "eclipse-temurin"
+    description: "Test with Eclipse Temurin distribution"
+    task_parameters:
+      repository: "eclipse-temurin"
+      version: "17"
+      variant: "jdk"
+      compiler_flags: "-Xlint:all"
+  
+  - name: "java-slim"
+    description: "Test with slim Java image"
+    task_parameters:
+      repository: "openjdk"
+      version: "17"
+      variant: "slim"
+      compiler_flags: "-Xlint:all"

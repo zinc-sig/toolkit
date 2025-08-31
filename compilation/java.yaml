@@ -2,8 +2,8 @@ platform: linux
 image_resource:
   type: registry-image
   source:
-    repository: openjdk
-    tag: 11-jdk
+    repository: ((repository))
+    tag: ((version))-((variant))
 inputs:
   - name: submission
   - name: assignment-assets
@@ -36,7 +36,15 @@ run:
       
       # Find all Java files matching the pattern
       echo "Finding Java files with pattern: ${SOURCE_PATTERN}"
-      JAVA_FILES=$(find ${SOURCE_PATTERN} 2>/dev/null | tr '\n' ' ')
+      # Use bash globbing to find files
+      shopt -s globstar nullglob
+      JAVA_FILES=""
+      for file in ${SOURCE_PATTERN}; do
+        if [ -f "$file" ]; then
+          JAVA_FILES="$JAVA_FILES $file"
+        fi
+      done
+      JAVA_FILES=$(echo $JAVA_FILES)  # Trim is automatic with echo
       
       if [ -z "$JAVA_FILES" ]; then
         echo "Error: No Java files found matching pattern: ${SOURCE_PATTERN}"

@@ -32,6 +32,21 @@ parameters:
     description: Additional javac compiler flags
     default: "-Xlint:all"
     example: "-Xlint:all -encoding UTF-8 -Werror"
+  - name: repository
+    type: string
+    description: Docker image repository for Java
+    default: openjdk
+    example: "eclipse-temurin"
+  - name: version
+    type: string
+    description: Java version number
+    default: "17"
+    example: "21"
+  - name: variant
+    type: string
+    description: Image variant (jdk, jre, slim, alpine, etc.)
+    default: "jdk"
+    example: "slim"
   - name: score
     type: string
     description: Score to assign if compilation succeeds
