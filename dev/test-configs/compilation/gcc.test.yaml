@@ -22,6 +22,7 @@ task_parameters:
   output_binary: "hello"
   compiler_flags: "-Wall -Wextra -O2"
   language: "c"
+  version: "latest"
   score: "10"
 
 verification:
@@ -70,3 +71,9 @@ variants:
     description: "Test with maximum optimization"
     task_parameters:
       compiler_flags: "-O3 -march=native"
+  
+  - name: "gcc-11"
+    description: "Test with GCC version 11"
+    task_parameters:
+      version: "11"
+      compiler_flags: "-Wall -Wextra -std=c11"

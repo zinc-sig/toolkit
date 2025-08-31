@@ -22,6 +22,11 @@ parameters:
     description: Programming language (c or cpp/c++)
     default: c
     example: cpp
+  - name: version
+    type: string
+    description: GCC compiler version (Docker image tag)
+    default: latest
+    example: "13"
   - name: score
     type: string
     description: Score to assign if compilation succeeds
