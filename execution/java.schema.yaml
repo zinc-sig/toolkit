@@ -1,0 +1,64 @@
+---
+name: Java Execution
+description: Executes Java programs (JAR files or class files) with standard input/output redirection
+parameters:
+  - name: execution_type
+    type: string
+    description: Type of execution (jar or class)
+    default: jar
+    example: class
+  - name: execution_target
+    type: string
+    description: JAR file path or main class name to execute
+    default: compilation-output/app.jar
+    example: Main
+  - name: classpath
+    type: string
+    description: Additional classpath entries (colon-separated)
+    default: ""
+    example: "assignment-assets/lib/*:submission"
+  - name: java_flags
+    type: string
+    description: JVM flags (memory, system properties, etc.)
+    default: ""
+    example: "-Xmx256m -Xms128m -Dproperty=value"
+  - name: execution_flags
+    type: string
+    description: Command line arguments passed to the Java program
+    default: "{{ .args }}"
+    example: "--mode test --verbose"
+  - name: input_path
+    type: string
+    description: Path to input file for stdin
+    default: assignment-assets/{{ .code }}/input.txt
+    example: assignment-assets/test-1/input.txt
+  - name: output_path
+    type: string
+    description: Path to save stdout relative to the output directory
+    default: output.txt
+    example: output.txt
+  - name: stderr_path
+    type: string
+    description: Path to save stderr relative to the output directory
+    default: stderr.txt
+    example: stderr.txt
+  - name: repository
+    type: string
+    description: Docker image repository for Java
+    default: openjdk
+    example: eclipse-temurin
+  - name: version
+    type: string
+    description: Java version number
+    default: "17"
+    example: "21"
+  - name: variant
+    type: string
+    description: Image variant (jdk, jre, slim, alpine, etc.)
+    default: jdk
+    example: alpine
+  - name: score
+    type: string
+    description: Score to assign if execution succeeds (exit code 0)
+    default: "0"
+    example: "{{ .score }}"

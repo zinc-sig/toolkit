@@ -1,11 +1,60 @@
 ---
 platform: linux
-
 image_resource:
   type: registry-image
   source:
-    repository:
-
+    repository: ((repository))
+    tag: ((version))-((variant))
+inputs:
+  - name: submission
+  - name: compilation-output
+  - name: assignment-assets
+  - name: ghost
+outputs:
+  - name: execution-output
+params:
+  EXECUTION_TYPE: ((execution_type))
+  EXECUTION_TARGET: ((execution_target))
+  CLASSPATH: ((classpath))
+  JAVA_FLAGS: ((java_flags))
+  EXECUTION_FLAGS: ((execution_flags))
+  INPUT_PATH: ((input_path))
+  OUTPUT_PATH: ((output_path))
+  STDERR_PATH: ((stderr_path))
+  SCORE: ((score))
 run:
-  path:
+  path: bash
   args:
+    - -c
+    - |
+      set -e
+      
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+      
+      # Build classpath
+      FULL_CLASSPATH=""
+      if [ "${EXECUTION_TYPE}" = "jar" ]; then
+        # For JAR execution, the JAR itself contains the classpath
+        JAVA_CMD="java ${JAVA_FLAGS} -jar ${EXECUTION_TARGET}"
+      else
+        # For class execution, build classpath
+        FULL_CLASSPATH="compilation-output"
+        if [ -n "${CLASSPATH}" ]; then
+          FULL_CLASSPATH="${CLASSPATH}:compilation-output"
+        fi
+        JAVA_CMD="java ${JAVA_FLAGS} -cp ${FULL_CLASSPATH} ${EXECUTION_TARGET}"
+      fi
+      
+      echo "Executing Java program..."
+      echo "Command: ${JAVA_CMD} ${EXECUTION_FLAGS}"
+      echo "Input: ${INPUT_PATH}"
+      
+      # Execute with ghost for stdio capture and upload
+      ./ghost/ghost-linux-amd64 run --verbose \
+        -i "${INPUT_PATH}" \
+        -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
+        -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \
+        --score "${SCORE}" \
+        --upload-provider "minio" \
+        -- ${JAVA_CMD} ${EXECUTION_FLAGS}

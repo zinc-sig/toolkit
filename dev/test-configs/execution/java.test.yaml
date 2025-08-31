@@ -1,0 +1,107 @@
+---
+name: Java Execution Test
+description: Test configuration for Java program execution task
+
+mock_resources:
+  submission:
+    files:
+      # This would typically be empty for execution since we use compilation-output
+      placeholder.txt: "submission placeholder"
+  
+  assignment_assets:
+    files:
+      test-1/input.txt: |
+        5
+        10
+      test-1/expected.txt: |
+        Sum: 15
+      test-2/input.txt: |
+        Hello
+        World
+      test-2/expected.txt: |
+        Input: Hello
+        Input: World
+  
+  # Note: In a real pipeline, compilation-output would come from the compilation stage
+  # For testing, we'll create a simple compiled Java program
+  compilation_output:
+    files:
+      app.jar: "mock-jar-content"  # This would be a real JAR in production
+      Main.class: "mock-class-content"  # This would be real bytecode
+
+task_parameters:
+  execution_type: "jar"
+  execution_target: "compilation-output/app.jar"
+  classpath: ""
+  java_flags: ""
+  execution_flags: ""
+  input_path: "assignment-assets/test-1/input.txt"
+  output_path: "output.txt"
+  stderr_path: "stderr.txt"
+  repository: "openjdk"
+  version: "17"
+  variant: "jre"
+  score: "20"
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  script: |
+    echo "Checking Java execution output..."
+    if [ -f execution-output/output.txt ]; then
+      echo "✅ Output file created"
+      echo "Output content:"
+      cat execution-output/output.txt
+      echo ""
+      echo "Stderr content:"
+      cat execution-output/stderr.txt 2>/dev/null || echo "(no stderr)"
+    else
+      echo "❌ Output file not found"
+      exit 1
+    fi
+
+# Test variants for different execution scenarios
+variants:
+  - name: "class-execution"
+    description: "Execute a class file instead of JAR"
+    task_parameters:
+      execution_type: "class"
+      execution_target: "Main"
+      classpath: ""
+  
+  - name: "with-arguments"
+    description: "Execute with command line arguments"
+    task_parameters:
+      execution_flags: "--verbose --mode=test"
+  
+  - name: "with-jvm-flags"
+    description: "Execute with JVM flags"
+    task_parameters:
+      java_flags: "-Xmx512m -Xms256m -Dprop=value"
+  
+  - name: "test-2-input"
+    description: "Execute with different input file"
+    task_parameters:
+      input_path: "assignment-assets/test-2/input.txt"
+  
+  - name: "with-classpath"
+    description: "Execute with additional classpath"
+    task_parameters:
+      execution_type: "class"
+      execution_target: "Main"
+      classpath: "assignment-assets/lib/*:submission"
+  
+  - name: "java-21"
+    description: "Execute with Java 21"
+    task_parameters:
+      repository: "openjdk"
+      version: "21"
+      variant: "jre"
+  
+  - name: "temurin-alpine"
+    description: "Execute with Eclipse Temurin Alpine"
+    task_parameters:
+      repository: "eclipse-temurin"
+      version: "17"
+      variant: "jre-alpine"

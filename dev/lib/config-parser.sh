@@ -240,3 +240,84 @@ show_config_summary() {
         list_variants "$config_file" | sed 's/^/  - /'
     fi
 }
+
+# Load preparation configuration
+# Usage: load_preparation_config config.yaml
+load_preparation_config() {
+    local config_file="$1"
+    
+    # Check if preparation section exists and is not null
+    local prep_section=$(yq eval '.preparation' "$config_file" 2>/dev/null)
+    if [[ "$prep_section" == "null" ]] || [[ -z "$prep_section" ]]; then
+        export TEST_HAS_PREPARE="false"
+        return 0
+    fi
+    
+    export TEST_HAS_PREPARE="true"
+    export TEST_PREPARE_IMAGE_REPO=$(yq eval '.preparation.image.repository // "busybox"' "$config_file")
+    export TEST_PREPARE_IMAGE_TAG=$(yq eval '.preparation.image.tag // "latest"' "$config_file")
+    export TEST_PREPARE_SCRIPT=$(yq eval '.preparation.script // ""' "$config_file")
+    
+    # Get outputs as array - empty by default
+    export TEST_PREPARE_OUTPUTS=$(yq eval '.preparation.outputs // []' "$config_file")
+}
+
+# Load verification configuration
+# Usage: load_verification_config config.yaml
+load_verification_config() {
+    local config_file="$1"
+    
+    # Get verification inputs - default to compilation-output for backward compatibility
+    export TEST_VERIFY_INPUTS=$(yq eval '.verification.inputs // ["compilation-output"]' "$config_file")
+}
+
+# Check if verification has custom inputs
+# Usage: has_verify_inputs config.yaml
+has_verify_inputs() {
+    local config_file="$1"
+    local inputs=$(yq eval '.verification.inputs' "$config_file" 2>/dev/null)
+    if [[ "$inputs" == "null" ]] || [[ -z "$inputs" ]]; then
+        return 1
+    fi
+    yq eval '.verification.inputs | length > 0' "$config_file" 2>/dev/null | grep -q "true"
+}
+
+# Generate verify inputs list for pipeline
+# Usage: generate_verify_inputs config.yaml output_file
+generate_verify_inputs() {
+    local config_file="$1"
+    local output_file="$2"
+    
+    echo "          inputs:" >> "$output_file"
+    if has_verify_inputs "$config_file"; then
+        yq eval '.verification.inputs[] | "            - name: " + .' "$config_file" >> "$output_file"
+    else
+        # Default inputs for backward compatibility
+        echo "            - name: compilation-output" >> "$output_file"
+    fi
+}
+
+# Check if preparation has outputs
+# Usage: has_prepare_outputs config.yaml
+has_prepare_outputs() {
+    local config_file="$1"
+    local outputs=$(yq eval '.preparation.outputs' "$config_file" 2>/dev/null)
+    if [[ "$outputs" == "null" ]] || [[ -z "$outputs" ]]; then
+        return 1
+    fi
+    yq eval '.preparation.outputs | length > 0' "$config_file" 2>/dev/null | grep -q "true"
+}
+
+# Generate prepare outputs list for pipeline
+# Usage: generate_prepare_outputs config.yaml output_file
+generate_prepare_outputs() {
+    local config_file="$1"
+    local output_file="$2"
+    
+    if ! has_prepare_outputs "$config_file"; then
+        return 0
+    fi
+    
+    echo "          outputs:" >> "$output_file"
+    yq eval '.preparation.outputs[] | "            - name: " + .' "$config_file" >> "$output_file"
+}

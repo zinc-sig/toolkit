@@ -7,6 +7,7 @@ A modern, language-agnostic development environment for testing Concourse CI tas
 - 🔧 **Zero-code language support** - Add new languages through configuration files only
 - 🎛️ **yq-based YAML parsing** - Robust, reliable configuration processing
 - 🔀 **Test variants** - Multiple test scenarios per language (JAR/classes, error-handling, etc.)
+- ⚙️ **Prepare steps** - Configurable input preparation (compilation, file generation, setup)
 - 🛡️ **Schema validation** - Automatic configuration validation with helpful error messages
 - 🚀 **One-command testing** - `./dev.sh test compilation/java.yaml --variant classes-only`
 
@@ -19,7 +20,7 @@ A modern, language-agnostic development environment for testing Concourse CI tas
 # 2. Test existing languages with zero setup
 ./dev.sh test compilation/gcc.yaml           # C/C++ compilation
 ./dev.sh test compilation/java.yaml          # Java JAR creation
-./dev.sh test compilation/java.yaml --variant classes-only  # Java classes only
+./dev.sh test execution/java.yaml            # Java execution (with prepare step)
 ./dev.sh test execution/python.yaml          # Python execution
 
 # 3. View configuration details
@@ -134,10 +135,25 @@ task_parameters:
   build_flags: "--release"
   score: "10"
 
+# Optional: Prepare step to pre-compile dependencies
+preparation:
+  image:
+    repository: rust
+    tag: "1.70"
+  outputs:
+    - compilation-output
+  script: |
+    echo "Pre-building Rust dependencies..."
+    cd submission && cargo build --release
+    mkdir -p compilation-output/target/release
+    cp target/release/* compilation-output/target/release/ || true
+
 verification:
   image:
     repository: rust
     tag: "1.70-slim"
+  inputs:
+    - compilation-output
   script: |
     echo "Checking Rust compilation..."
     if [ -f compilation-output/target/release/test-program ]; then
@@ -196,6 +212,8 @@ variants:
   - Variants: `classes-only`, `package-structure`, `with-external-libs`
 
 ### Execution Tasks  
+- **Java**: `execution/java.yaml` (with prepare step for compilation)
+  - Variants: `with-arguments`
 - **Python**: `execution/python.yaml`
   - Variants: `with-imports`, `error-handling`, `file-io`
 
@@ -222,6 +240,14 @@ Each configuration can define custom verification logic using any Docker image.
 
 ### ✅ YAML Validation
 Configurations are validated against a schema with helpful error messages.
+
+### ✅ Prepare Steps
+Optional pipeline stage that runs before the main task to prepare required inputs:
+- **Compile code**: Generate JAR files, binaries, or compiled assets
+- **Generate files**: Create test fixtures, configuration files, or mock data  
+- **Setup environments**: Install dependencies, configure services, or prepare runtime environments
+- **Configurable outputs**: Each prepare step declares what outputs it creates
+- **Flexible execution**: Use any Docker image and custom scripts
 
 ## Migration from Legacy System
 

@@ -220,8 +220,49 @@ jobs:
         - get: submission
         - get: assignment-assets
         - get: task-yaml
+EOF
+    
+    # Check if prepare step is needed
+    load_preparation_config "$config_file"
+    
+    if [[ "$TEST_HAS_PREPARE" == "true" ]]; then
+        cat >> "$output_file" << EOF
 
-      - task: compile
+      - task: prepare
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: $TEST_PREPARE_IMAGE_REPO
+              tag: $TEST_PREPARE_IMAGE_TAG
+          inputs:
+            - name: submission
+            - name: assignment-assets
+EOF
+        
+        # Add outputs if defined
+        generate_prepare_outputs "$config_file" "$output_file"
+        
+        cat >> "$output_file" << EOF
+          run:
+            path: sh
+            args:
+              - -c
+              - |
+EOF
+        
+        # Add preparation script
+        if [[ -n "$TEST_PREPARE_SCRIPT" ]]; then
+            echo "$TEST_PREPARE_SCRIPT" | sed 's/^/                /' >> "$output_file"
+        else
+            echo "                echo 'Empty prepare step'" >> "$output_file"
+        fi
+    fi
+    
+    cat >> "$output_file" << EOF
+
+      - task: run-task
         file: task-yaml/${task_name}-${version}.yaml
         vars:
 EOF
@@ -262,9 +303,12 @@ EOF
             source:
               repository: $TEST_VERIFY_IMAGE_REPO
               tag: $TEST_VERIFY_IMAGE_TAG
-          inputs:
-            - name: compilation-output
-              optional: true
+EOF
+    
+    # Generate verification inputs
+    generate_verify_inputs "$config_file" "$output_file"
+    
+    cat >> "$output_file" << EOF
           run:
             path: sh
             args:

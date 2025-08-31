@@ -1,0 +1,156 @@
+---
+name: Java Execution with Prepared JAR
+description: Test Java execution with actual compiled JAR from prepare step
+
+mock_resources:
+  submission:
+    files:
+      InputReader.java: |
+        import java.util.Scanner;
+        
+        public class InputReader {
+            public static void main(String[] args) {
+                Scanner scanner = new Scanner(System.in);
+                
+                // Check for command line arguments
+                if (args.length > 0) {
+                    System.out.println("Arguments received: " + String.join(", ", args));
+                }
+                
+                // Read two numbers and calculate sum
+                if (scanner.hasNextInt()) {
+                    int a = scanner.nextInt();
+                    if (scanner.hasNextInt()) {
+                        int b = scanner.nextInt();
+                        System.out.println("Sum: " + (a + b));
+                    }
+                } else {
+                    System.out.println("No valid integers found in input");
+                }
+                
+                scanner.close();
+            }
+        }
+  
+  assignment_assets:
+    files:
+      test-1/input.txt: |
+        5
+        10
+      test-1/expected.txt: |
+        Sum: 15
+
+# Prepare step with explicit compilation-output creation
+preparation:
+  image:
+    repository: openjdk
+    tag: 17-jdk
+  outputs:
+    - compilation-output  # Explicitly declare what this prepare step creates
+  script: |
+    echo "=== Prepare Step: Compiling Java code ==="
+    
+    # Create compilation output directory
+    mkdir -p compilation-output
+    
+    # Compile Java source files
+    echo "Compiling Java files..."
+    javac submission/*.java -d compilation-output/
+    
+    # Create executable JAR file
+    echo "Creating JAR file..."
+    cd compilation-output
+    jar cfe app.jar InputReader InputReader.class
+    cd ..
+    
+    # List the prepared files
+    echo "Prepared files:"
+    ls -la compilation-output/
+    
+    # Verify JAR can be executed (quick test)
+    echo "Quick JAR test:"
+    echo "Test" | java -jar compilation-output/app.jar || echo "JAR test completed"
+
+task_parameters:
+  execution_type: "jar"
+  execution_target: "compilation-output/app.jar"
+  classpath: ""
+  java_flags: ""
+  execution_flags: ""
+  input_path: "assignment-assets/test-1/input.txt"
+  output_path: "output.txt"
+  stderr_path: "stderr.txt"
+  repository: "openjdk"
+  version: "17"
+  variant: "jdk"
+  score: "20"
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  inputs:
+    - execution-output
+  script: |
+    echo "=== Verification: Checking Java Execution Results ==="
+    
+    # Check if output file was created
+    if [ -f execution-output/output.txt ]; then
+      echo "✅ Output file created successfully"
+      echo ""
+      echo "📄 Output content:"
+      cat execution-output/output.txt
+      echo ""
+      
+      # Check if output matches expected for test-1
+      if grep -q "Sum: 15" execution-output/output.txt; then
+        echo "✅ Output matches expected result!"
+        echo "✅ Java execution with prepared JAR works correctly!"
+      else
+        echo "❌ Output doesn't match expected result"
+        echo "Expected: Sum: 15"
+        echo "Got:"
+        cat execution-output/output.txt
+        exit 1
+      fi
+    else
+      echo "❌ Output file not found"
+      echo "Checking error file..."
+      if [ -f execution-output/stderr.txt ]; then
+        echo "Error output:"
+        cat execution-output/stderr.txt
+      fi
+      exit 1
+    fi
+    
+    # Check stderr for any issues
+    if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
+      echo ""
+      echo "⚠️  stderr content:"
+      cat execution-output/stderr.txt
+    fi
+    
+    echo ""
+    echo "🎉 Complete test successful: Prepare step + Java execution + Verification!"
+
+# Test variants for different execution scenarios
+variants:
+  - name: "with-arguments"
+    description: "Execute with command line arguments"
+    task_parameters:
+      execution_flags: "arg1 arg2 arg3"
+    verification:
+      script: |
+        echo "Checking output with arguments..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Arguments received: arg1, arg2, arg3" execution-output/output.txt; then
+            echo "✅ Arguments passed correctly!"
+          else
+            echo "❌ Arguments not found in output"
+            exit 1
+          fi
+        else
+          echo "❌ Output file not found"
+          exit 1
+        fi

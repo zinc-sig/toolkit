@@ -1,0 +1,144 @@
+---
+name: Java Execution Integrated Test
+description: Test Java execution with actual compiled code
+
+# First compile a Java program, then execute it
+mock_resources:
+  submission:
+    files:
+      InputReader.java: |
+        import java.util.Scanner;
+        
+        public class InputReader {
+            public static void main(String[] args) {
+                Scanner scanner = new Scanner(System.in);
+                
+                // Check for command line arguments
+                if (args.length > 0) {
+                    System.out.println("Arguments: " + String.join(", ", args));
+                }
+                
+                // Read two numbers and calculate sum
+                if (scanner.hasNextInt()) {
+                    int a = scanner.nextInt();
+                    if (scanner.hasNextInt()) {
+                        int b = scanner.nextInt();
+                        System.out.println("Sum: " + (a + b));
+                    }
+                } else if (scanner.hasNextLine()) {
+                    // Read text input
+                    while (scanner.hasNextLine()) {
+                        String line = scanner.nextLine();
+                        if (!line.isEmpty()) {
+                            System.out.println("Input: " + line);
+                        }
+                    }
+                }
+                
+                scanner.close();
+            }
+        }
+  
+  assignment_assets:
+    files:
+      test-1/input.txt: |
+        5
+        10
+      test-1/expected.txt: |
+        Sum: 15
+      test-2/input.txt: |
+        Hello
+        World
+      test-2/expected.txt: |
+        Input: Hello
+        Input: World
+
+# This configuration would work with a pipeline that first compiles then executes
+compilation_parameters:
+  source_pattern: "submission/*.java"
+  main_class: "InputReader"
+  output_type: "jar"
+  output_name: "app.jar"
+  classpath: ""
+  compiler_flags: "-Xlint:all"
+  repository: "openjdk"
+  version: "17"
+  variant: "jdk"
+  score: "10"
+
+task_parameters:
+  execution_type: "jar"
+  execution_target: "compilation-output/app.jar"
+  classpath: ""
+  java_flags: ""
+  execution_flags: ""
+  input_path: "assignment-assets/test-1/input.txt"
+  output_path: "output.txt"
+  stderr_path: "stderr.txt"
+  repository: "openjdk"
+  version: "17"
+  variant: "jre"
+  score: "20"
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  script: |
+    echo "Checking Java execution output..."
+    if [ -f execution-output/output.txt ]; then
+      echo "✅ Output file created"
+      echo "Output content:"
+      cat execution-output/output.txt
+      
+      # Check if output matches expected for test-1
+      if grep -q "Sum: 15" execution-output/output.txt; then
+        echo "✅ Output is correct!"
+      else
+        echo "❌ Output doesn't match expected"
+        exit 1
+      fi
+    else
+      echo "❌ Output file not found"
+      exit 1
+    fi
+
+variants:
+  - name: "class-execution"
+    description: "Execute class file directly"
+    compilation_parameters:
+      output_type: "classes"
+      output_name: ""
+    task_parameters:
+      execution_type: "class"
+      execution_target: "InputReader"
+  
+  - name: "with-arguments"
+    description: "Execute with command line arguments"
+    task_parameters:
+      execution_flags: "arg1 arg2 arg3"
+    verification:
+      script: |
+        echo "Checking output with arguments..."
+        if grep -q "Arguments: arg1, arg2, arg3" execution-output/output.txt; then
+          echo "✅ Arguments passed correctly!"
+        else
+          echo "❌ Arguments not found in output"
+          cat execution-output/output.txt
+          exit 1
+        fi
+  
+  - name: "text-input"
+    description: "Execute with text input"
+    task_parameters:
+      input_path: "assignment-assets/test-2/input.txt"
+    verification:
+      script: |
+        echo "Checking text input handling..."
+        if grep -q "Input: Hello" execution-output/output.txt && grep -q "Input: World" execution-output/output.txt; then
+          echo "✅ Text input handled correctly!"
+        else
+          echo "❌ Text input not processed correctly"
+          cat execution-output/output.txt
+          exit 1
+        fi
