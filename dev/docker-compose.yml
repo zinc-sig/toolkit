@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for Concourse
+  concourse-db:
+    image: postgres:15
+    container_name: toolkit-concourse-db
+    environment:
+      POSTGRES_DB: concourse
+      POSTGRES_USER: concourse_user
+      POSTGRES_PASSWORD: concourse_pass
+      PGDATA: /database
+    volumes:
+      - postgres-db:/database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U concourse_user -d concourse"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - toolkit-dev
+
+  # Concourse CI - Web and Worker combined (quickstart mode)
+  concourse:
+    image: concourse/concourse:latest
+    container_name: toolkit-concourse
+    command: quickstart
+    privileged: true
+    cgroup: host
+    depends_on:
+      concourse-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"  # Concourse Web UI
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    environment:
+      # Database configuration
+      CONCOURSE_POSTGRES_HOST: concourse-db
+      CONCOURSE_POSTGRES_USER: concourse_user
+      CONCOURSE_POSTGRES_PASSWORD: concourse_pass
+      CONCOURSE_POSTGRES_DATABASE: concourse
+      
+      # External URL for web UI
+      CONCOURSE_EXTERNAL_URL: http://localhost:8080
+      
+      # Authentication - default user for development
+      CONCOURSE_ADD_LOCAL_USER: dev:dev
+      CONCOURSE_MAIN_TEAM_LOCAL_USER: dev
+      
+      # Worker configuration
+      CONCOURSE_WORKER_BAGGAGECLAIM_DRIVER: overlay
+      # Force Garden to use Google DNS instead of trying to use local DNS
+      CONCOURSE_GARDEN_DNS_SERVER: "8.8.8.8"
+      
+      # Security secrets (base64 encoded)
+      CONCOURSE_CLIENT_SECRET: Y29uY291cnNlLXdlYgo=
+      CONCOURSE_TSA_CLIENT_SECRET: Y29uY291cnNlLXdvcmtlcgo=
+      
+      # Cluster identification
+      CONCOURSE_CLUSTER_NAME: toolkit-dev
+      
+      # Enable advanced features
+      CONCOURSE_ENABLE_PIPELINE_INSTANCES: "true"
+      CONCOURSE_ENABLE_ACROSS_STEP: "true"
+      CONCOURSE_ENABLE_RESOURCE_CAUSALITY: "true"
+    volumes:
+      - concourse-worker:/worker-state
+    networks:
+      - toolkit-dev
+
+  # MinIO for object storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: toolkit-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_DEFAULT_BUCKETS: "submissions,assignment-assets,ghost-releases,execution-outputs,compilation-outputs,testing-outputs"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - toolkit-dev
+
+  # MinIO Client for bucket initialization and sample data upload
+  minio-init:
+    image: minio/mc:latest
+    container_name: toolkit-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./mock-resources:/mock-resources:ro
+    entrypoint: >
+      /bin/sh -c "
+      # Configure MinIO alias
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      
+      # Create buckets
+      /usr/bin/mc mb --ignore-existing myminio/submissions;
+      /usr/bin/mc mb --ignore-existing myminio/assignment-assets;
+      /usr/bin/mc mb --ignore-existing myminio/ghost-releases;
+      /usr/bin/mc mb --ignore-existing myminio/execution-outputs;
+      /usr/bin/mc mb --ignore-existing myminio/compilation-outputs;
+      /usr/bin/mc mb --ignore-existing myminio/testing-outputs;
+      
+      # Set public read for ghost releases
+      /usr/bin/mc anonymous set public myminio/ghost-releases;
+      
+      # Upload mock resources if they exist
+      if [ -d /mock-resources/submissions ]; then
+        /usr/bin/mc cp --recursive /mock-resources/submissions/* myminio/submissions/ 2>/dev/null || true;
+      fi;
+      if [ -d /mock-resources/assignment-assets ]; then
+        /usr/bin/mc cp --recursive /mock-resources/assignment-assets/* myminio/assignment-assets/ 2>/dev/null || true;
+      fi;
+      if [ -d /mock-resources/ghost ]; then
+        /usr/bin/mc cp --recursive /mock-resources/ghost/* myminio/ghost-releases/ 2>/dev/null || true;
+      fi;
+      
+      echo 'MinIO initialization complete';
+      exit 0;
+      "
+    networks:
+      - toolkit-dev
+
+volumes:
+  postgres-db:
+    name: toolkit-postgres-db
+  concourse-worker:
+    name: toolkit-concourse-worker
+  minio-data:
+    name: toolkit-minio-data
+
+networks:
+  toolkit-dev:
+    name: toolkit-dev-network
+    driver: bridge
