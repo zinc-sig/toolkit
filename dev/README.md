@@ -213,7 +213,7 @@ variants:
 
 ### Execution Tasks  
 - **Java**: `execution/java.yaml` (with prepare step for compilation)
-  - Variants: `with-arguments`
+  - Variants: `class-execution`, `with-arguments`, `text-input`, `single-line-input`, `with-jvm-flags`, `java-21`, `structure-only`
 - **Python**: `execution/python.yaml`
   - Variants: `with-imports`, `error-handling`, `file-io`
 

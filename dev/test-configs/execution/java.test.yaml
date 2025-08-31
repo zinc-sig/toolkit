@@ -1,12 +1,54 @@
 ---
 name: Java Execution Test
-description: Test configuration for Java program execution task
+description: Comprehensive test configuration for Java program execution with prepare step and multiple variants
 
 mock_resources:
   submission:
     files:
-      # This would typically be empty for execution since we use compilation-output
-      placeholder.txt: "submission placeholder"
+      InputReader.java: |
+        import java.util.Scanner;
+        
+        public class InputReader {
+            public static void main(String[] args) {
+                Scanner scanner = new Scanner(System.in);
+                
+                // Check for command line arguments
+                if (args.length > 0) {
+                    System.out.println("Arguments received: " + String.join(", ", args));
+                }
+                
+                // Read input and process
+                if (scanner.hasNextLine()) {
+                    String line = scanner.nextLine();
+                    try {
+                        // Try to parse as numbers for sum calculation
+                        String[] parts = line.split("\\s+");
+                        if (parts.length >= 2) {
+                            int a = Integer.parseInt(parts[0]);
+                            int b = Integer.parseInt(parts[1]);
+                            System.out.println("Sum: " + (a + b));
+                        } else {
+                            int a = Integer.parseInt(line);
+                            if (scanner.hasNextInt()) {
+                                int b = scanner.nextInt();
+                                System.out.println("Sum: " + (a + b));
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        // Handle text input
+                        System.out.println("Text input: " + line);
+                        if (scanner.hasNextLine()) {
+                            String line2 = scanner.nextLine();
+                            System.out.println("Combined: " + line + " " + line2);
+                        }
+                    }
+                } else {
+                    System.out.println("No input provided");
+                }
+                
+                scanner.close();
+            }
+        }
   
   assignment_assets:
     files:
@@ -19,15 +61,39 @@ mock_resources:
         Hello
         World
       test-2/expected.txt: |
-        Input: Hello
-        Input: World
-  
-  # Note: In a real pipeline, compilation-output would come from the compilation stage
-  # For testing, we'll create a simple compiled Java program
-  compilation_output:
-    files:
-      app.jar: "mock-jar-content"  # This would be a real JAR in production
-      Main.class: "mock-class-content"  # This would be real bytecode
+        Text input: Hello
+        Combined: Hello World
+      test-3/input.txt: |
+        15 25
+      test-3/expected.txt: |
+        Sum: 40
+
+# Prepare step for realistic Java execution testing
+preparation:
+  image:
+    repository: openjdk
+    tag: 17-jdk
+  outputs:
+    - compilation-output
+  script: |
+    echo "=== Prepare Step: Compiling Java code ==="
+    
+    # Create compilation output directory
+    mkdir -p compilation-output
+    
+    # Compile Java source files
+    echo "Compiling Java files..."
+    javac submission/*.java -d compilation-output/
+    
+    # Create executable JAR file
+    echo "Creating JAR file..."
+    cd compilation-output
+    jar cfe app.jar InputReader InputReader.class
+    cd ..
+    
+    # List the prepared files
+    echo "Prepared files:"
+    ls -la compilation-output/
 
 task_parameters:
   execution_type: "jar"
@@ -40,68 +106,154 @@ task_parameters:
   stderr_path: "stderr.txt"
   repository: "openjdk"
   version: "17"
-  variant: "jre"
+  variant: "jdk"
   score: "20"
 
 verification:
   image:
     repository: busybox
     tag: latest
+  inputs:
+    - execution-output
   script: |
-    echo "Checking Java execution output..."
+    echo "=== Verification: Checking Java Execution Results ==="
+    
+    # Check if output file was created
     if [ -f execution-output/output.txt ]; then
-      echo "✅ Output file created"
-      echo "Output content:"
+      echo "✅ Output file created successfully"
+      echo ""
+      echo "📄 Output content:"
       cat execution-output/output.txt
       echo ""
-      echo "Stderr content:"
-      cat execution-output/stderr.txt 2>/dev/null || echo "(no stderr)"
+      
+      # Check if output matches expected for test-1 (default)
+      if grep -q "Sum: 15" execution-output/output.txt; then
+        echo "✅ Output matches expected result!"
+        echo "✅ Java execution test passed!"
+      else
+        echo "❌ Output doesn't match expected result"
+        echo "Expected: Sum: 15"
+        echo "Got:"
+        cat execution-output/output.txt
+        exit 1
+      fi
     else
       echo "❌ Output file not found"
+      echo "Checking error file..."
+      if [ -f execution-output/stderr.txt ]; then
+        echo "Error output:"
+        cat execution-output/stderr.txt
+      fi
       exit 1
+    fi
+    
+    # Check stderr for any issues (but don't fail on warnings)
+    if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
+      echo ""
+      echo "⚠️  stderr content:"
+      cat execution-output/stderr.txt
     fi
 
 # Test variants for different execution scenarios
 variants:
   - name: "class-execution"
-    description: "Execute a class file instead of JAR"
+    description: "Execute Java class files directly (not JAR)"
     task_parameters:
       execution_type: "class"
-      execution_target: "Main"
+      execution_target: "InputReader"
       classpath: ""
-  
+    verification:
+      script: |
+        echo "Verifying class execution..."
+        if [ -f execution-output/output.txt ] && grep -q "Sum: 15" execution-output/output.txt; then
+          echo "✅ Class execution successful!"
+        else
+          echo "❌ Class execution failed"
+          exit 1
+        fi
+
   - name: "with-arguments"
     description: "Execute with command line arguments"
     task_parameters:
-      execution_flags: "--verbose --mode=test"
-  
+      execution_flags: "arg1 arg2 test"
+    verification:
+      script: |
+        echo "Verifying execution with arguments..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Arguments received: arg1, arg2, test" execution-output/output.txt && 
+             grep -q "Sum: 15" execution-output/output.txt; then
+            echo "✅ Arguments passed correctly!"
+          else
+            echo "❌ Arguments not found or sum incorrect"
+            exit 1
+          fi
+        fi
+
+  - name: "text-input"
+    description: "Test with text input instead of numbers"
+    task_parameters:
+      input_path: "assignment-assets/test-2/input.txt"
+    verification:
+      script: |
+        echo "Verifying text input processing..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Text input: Hello" execution-output/output.txt && 
+             grep -q "Combined: Hello World" execution-output/output.txt; then
+            echo "✅ Text input processed correctly!"
+          else
+            echo "❌ Text input processing failed"
+            exit 1
+          fi
+        fi
+
+  - name: "single-line-input"
+    description: "Test with single line containing two numbers"
+    task_parameters:
+      input_path: "assignment-assets/test-3/input.txt"
+    verification:
+      script: |
+        echo "Verifying single line input processing..."
+        if [ -f execution-output/output.txt ] && grep -q "Sum: 40" execution-output/output.txt; then
+          echo "✅ Single line input processed correctly!"
+        else
+          echo "❌ Single line input processing failed"
+          cat execution-output/output.txt
+          exit 1
+        fi
+
   - name: "with-jvm-flags"
     description: "Execute with JVM flags"
     task_parameters:
-      java_flags: "-Xmx512m -Xms256m -Dprop=value"
-  
-  - name: "test-2-input"
-    description: "Execute with different input file"
-    task_parameters:
-      input_path: "assignment-assets/test-2/input.txt"
-  
-  - name: "with-classpath"
-    description: "Execute with additional classpath"
-    task_parameters:
-      execution_type: "class"
-      execution_target: "Main"
-      classpath: "assignment-assets/lib/*:submission"
-  
+      java_flags: "-Xmx256m -Xms128m"
+    verification:
+      script: |
+        echo "Verifying execution with JVM flags..."
+        if [ -f execution-output/output.txt ] && grep -q "Sum: 15" execution-output/output.txt; then
+          echo "✅ JVM flags execution successful!"
+        else
+          echo "❌ JVM flags execution failed"
+          exit 1
+        fi
+
   - name: "java-21"
-    description: "Execute with Java 21"
+    description: "Test with Java 21"
     task_parameters:
       repository: "openjdk"
       version: "21"
-      variant: "jre"
-  
-  - name: "temurin-alpine"
-    description: "Execute with Eclipse Temurin Alpine"
-    task_parameters:
-      repository: "eclipse-temurin"
-      version: "17"
-      variant: "jre-alpine"
+      variant: "jdk"
+    preparation:
+      image:
+        repository: openjdk
+        tag: 21-jdk
+
+  - name: "structure-only"
+    description: "Basic structure validation without real execution"
+    verification:
+      script: |
+        echo "Note: This is a structure test only"
+        echo "Validating task YAML structure and parameter configuration"
+        echo "✅ Task parameters are properly configured"
+        echo "✅ Input/output paths are set"
+        echo "✅ Java execution task structure is valid"

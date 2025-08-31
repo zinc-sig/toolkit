@@ -445,11 +445,13 @@ dev/
 ├── bin/                        # fly CLI and ghost binary
 ├── examples/                   # Working pipeline examples
 │   └── test-gcc-minio.yml     # Example gcc test with MinIO
-├── task-testing/              # Test files
-│   ├── submissions/           # Sample source code
-│   └── assets/               # Test inputs
+├── test-configs/              # Configuration-driven test files
+│   ├── compilation/           # Test configs for compilation tasks
+│   └── execution/            # Test configs for execution tasks
+├── lib/                       # Configuration parsing libraries
+│   └── config-parser.sh      # yq-based YAML configuration parser
 ├── docker-compose.yml         # Infrastructure definition
-├── dev.sh                    # Main management script
+├── dev.sh                    # Main configuration-driven CLI tool
 ├── generate-task-pipeline.sh # Pipeline generator
 ├── README.md                 # Quick start guide
 ├── DEVELOPER_GUIDE.md        # This file

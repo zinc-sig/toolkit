@@ -79,8 +79,9 @@ The recommended way to test task files is using the dev.sh script:
 ```
 
 The script automatically:
+- Discovers test configurations from test-configs/ directory
 - Uploads task YAML to MinIO
-- Creates appropriate test pipeline
-- Runs the test
+- Creates appropriate test pipeline with variants
+- Runs the test using configuration-driven approach
 - Shows uploaded files in MinIO
 - Cleans up after completion
