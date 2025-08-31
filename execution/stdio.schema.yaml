@@ -10,12 +10,12 @@ parameters:
   - name: execution_flags
     type: string
     description: Command line arguments passed to the binary
-    default: "((.:scenario.args))"
+    default: "{{ .args }}"
     example: "--mode test --verbose"
   - name: input_path
     type: string
     description: Path to input file for stdin
-    default: assignment-assets/((.:scenario.code))/input.txt
+    default: assignment-assets/{{ .code }}/input.txt
     example: assignment-assets/test-1/input.txt
   - name: output_path
     type: string
@@ -31,4 +31,4 @@ parameters:
     type: string
     description: Score to assign if execution succeeds (exit code 0)
     default: "0"
-    example: "((.:scenario.score))"
+    example: "{{ .score }}"

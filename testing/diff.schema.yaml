@@ -10,7 +10,7 @@ parameters:
   - name: expected_path
     type: string
     description: Path to expected output file
-    default: assignment-assets/((.:scenario.code))/expected.txt
+    default: assignment-assets/{{ .code }}/expected.txt
     example: assignment-assets/test-1/expected.txt
   - name: output_path
     type: string
@@ -25,7 +25,7 @@ parameters:
   - name: score
     type: string
     description: Score to assign if files match exactly
-    default: "((.:scenario.score))"
+    default: "{{ .score }}"
     example: "100"
   - name: diff_flags
     type: string
