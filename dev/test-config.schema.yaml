@@ -1,0 +1,206 @@
+---
+# Test Configuration Schema
+# Defines the structure for task test configurations
+name: Test Configuration Schema
+version: "1.0"
+description: Schema for defining test configurations for zinc-sig toolkit tasks
+
+schema:
+  type: object
+  required:
+    - name
+    - mock_resources
+    - task_parameters
+    - verification
+  properties:
+    name:
+      type: string
+      description: Name of the test configuration
+      example: "GCC Compilation Test"
+    
+    description:
+      type: string
+      description: Optional description of what this test covers
+      example: "Tests C/C++ compilation with GCC compiler"
+    
+    mock_resources:
+      type: object
+      description: Mock resources to create for testing
+      required:
+        - submission
+      properties:
+        submission:
+          type: object
+          description: Mock submission files
+          properties:
+            files:
+              type: object
+              description: Files to create (filename -> content mapping)
+              additionalProperties:
+                type: string
+            directories:
+              type: array
+              description: Directories to create
+              items:
+                type: string
+        
+        assignment_assets:
+          type: object
+          description: Mock assignment asset files
+          properties:
+            files:
+              type: object
+              additionalProperties:
+                type: string
+            directories:
+              type: array
+              items:
+                type: string
+    
+    task_parameters:
+      type: object
+      description: Parameters to pass to the task (as vars in Concourse)
+      additionalProperties: true
+      examples:
+        - source_file: "submission/main.c"
+          output_binary: "main"
+          compiler_flags: "-Wall -O2"
+        - source_pattern: "submission/*.java"
+          main_class: "Main"
+          output_type: "jar"
+    
+    verification:
+      type: object
+      description: How to verify the task output
+      required:
+        - image
+        - script
+      properties:
+        image:
+          type: object
+          description: Docker image for verification
+          required:
+            - repository
+          properties:
+            repository:
+              type: string
+              example: "busybox"
+            tag:
+              type: string
+              default: "latest"
+              example: "3.14"
+        
+        script:
+          type: string
+          description: Verification script to run
+          example: |
+            if [ -f compilation-output/main ]; then
+              echo "✅ Binary created"
+              ./compilation-output/main
+            else
+              echo "❌ Binary not found"
+              exit 1
+            fi
+        
+        script_file:
+          type: string
+          description: Path to external verification script (alternative to inline script)
+          example: "test-templates/verify-binary.sh"
+    
+    ghost_config:
+      type: object
+      description: Optional Ghost-specific configuration overrides
+      properties:
+        upload_files:
+          type: array
+          description: Files to upload with ghost
+          items:
+            type: string
+            example: "compilation-output/main:binaries/main"
+        
+        environment:
+          type: object
+          description: Environment variables for ghost
+          additionalProperties:
+            type: string
+    
+    variants:
+      type: array
+      description: Optional test variants with different parameters
+      items:
+        type: object
+        required:
+          - name
+          - task_parameters
+        properties:
+          name:
+            type: string
+            description: Variant name
+            example: "with-optimization"
+          
+          description:
+            type: string
+            description: What this variant tests
+          
+          task_parameters:
+            type: object
+            description: Parameter overrides for this variant
+            additionalProperties: true
+          
+          mock_resources:
+            type: object
+            description: Optional resource overrides for this variant
+
+# Example configurations demonstrating the schema
+examples:
+  - name: "Simple C Compilation"
+    mock_resources:
+      submission:
+        files:
+          main.c: |
+            #include <stdio.h>
+            int main() {
+              printf("Hello, World!\n");
+              return 0;
+            }
+    task_parameters:
+      source_file: "submission/main.c"
+      output_binary: "main"
+      compiler_flags: "-Wall"
+      language: "c"
+      score: "10"
+    verification:
+      image:
+        repository: "busybox"
+      script: |
+        if [ -f compilation-output/main ]; then
+          chmod +x compilation-output/main
+          ./compilation-output/main
+        else
+          exit 1
+        fi
+  
+  - name: "Java Package Compilation"
+    mock_resources:
+      submission:
+        directories:
+          - "com/example"
+        files:
+          com/example/Main.java: |
+            package com.example;
+            public class Main {
+              public static void main(String[] args) {
+                System.out.println("Hello from package!");
+              }
+            }
+    task_parameters:
+      source_pattern: "submission/**/*.java"
+      main_class: "com.example.Main"
+      output_type: "jar"
+      output_name: "app.jar"
+    verification:
+      image:
+        repository: "openjdk"
+        tag: "11-jdk"
+      script: |
+        java -jar compilation-output/app.jar

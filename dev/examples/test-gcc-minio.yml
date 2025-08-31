@@ -1,0 +1,121 @@
+# Test pipeline for gcc.yaml using MinIO storage
+resources:
+  # Ghost binary from GitHub
+  - name: ghost
+    type: github-release
+    source:
+      owner: zinc-sig
+      repository: ghost
+      release: true
+      pre_release: false
+
+  # Task YAML from MinIO (avoids interpolation issues)
+  - name: task-yaml
+    type: s3
+    source:
+      endpoint: http://172.19.0.2:9000
+      bucket: task-inputs
+      regexp: gcc-(.*).yaml  # S3 resource needs versioned pattern
+      access_key_id: minioadmin
+      secret_access_key: minioadmin
+      disable_ssl: true
+      use_v2_signing: true
+
+  # Mock submission files
+  - name: submission
+    type: mock
+    source:
+      create_files:
+        hello.c: |
+          #include <stdio.h>
+          
+          int main() {
+              printf("Hello, World!\n");
+              printf("This is a test program for the zinc-sig toolkit.\n");
+              return 0;
+          }
+
+  # Mock assignment assets
+  - name: assignment-assets
+    type: mock
+    source:
+      create_files:
+        placeholder.txt: "placeholder"
+
+jobs:
+  - name: test-gcc-task
+    plan:
+      - in_parallel:
+        - get: ghost
+        - get: submission
+        - get: assignment-assets
+        - get: task-yaml
+
+      # Run the actual gcc.yaml task with MinIO environment
+      - task: compile-with-ghost
+        file: task-yaml/gcc-v1.yaml
+        vars:
+          # These replace ((param)) placeholders in the task file
+          source_file: submission/hello.c
+          output_binary: hello
+          compiler_flags: "-Wall -Wextra -O2"
+          language: c
+          score: "10"
+        params:
+          # These are set as environment variables for ghost
+          GHOST_UPLOAD_CONFIG_ENDPOINT: http://172.19.0.2:9000
+          GHOST_UPLOAD_CONFIG_ACCESS_KEY: minioadmin
+          GHOST_UPLOAD_CONFIG_SECRET_KEY: minioadmin
+          GHOST_UPLOAD_CONFIG_BUCKET: task-outputs
+
+      # Display and verify results
+      - task: show-results
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: busybox
+          inputs:
+            - name: compilation-output
+              optional: true
+          run:
+            path: sh
+            args:
+              - -c
+              - |
+                echo "====================================="
+                echo "Compilation Task Results"
+                echo "====================================="
+                
+                if [ -d compilation-output ]; then
+                  echo ""
+                  echo "✅ Compilation output directory exists"
+                  echo ""
+                  echo "Files in compilation-output:"
+                  ls -la compilation-output/
+                  
+                  if [ -f compilation-output/hello ]; then
+                    echo ""
+                    echo "✅ Binary 'hello' was created successfully!"
+                    echo ""
+                    echo "Testing binary execution:"
+                    echo "-------------------------"
+                    chmod +x compilation-output/hello
+                    ./compilation-output/hello
+                    echo "-------------------------"
+                    echo ""
+                    echo "✅ Binary executed successfully!"
+                  else
+                    echo "❌ Binary 'hello' was not created"
+                    exit 1
+                  fi
+                else
+                  echo "❌ compilation-output directory not found"
+                  exit 1
+                fi
+                
+                echo ""
+                echo "====================================="
+                echo "✅ ALL TESTS PASSED!"
+                echo "====================================="

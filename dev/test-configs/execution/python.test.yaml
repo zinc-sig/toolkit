@@ -1,0 +1,141 @@
+---
+name: Python Execution Test
+description: Test configuration for Python script execution task
+
+mock_resources:
+  submission:
+    files:
+      main.py: |
+        def greet(name):
+            return f"Hello, {name}!"
+        
+        def calculate_sum(a, b):
+            return a + b
+        
+        if __name__ == "__main__":
+            print(greet("World"))
+            print(f"Sum of 5 + 3 = {calculate_sum(5, 3)}")
+      
+      src/utils.py: |
+        def factorial(n):
+            if n <= 1:
+                return 1
+            return n * factorial(n - 1)
+        
+        def is_prime(n):
+            if n < 2:
+                return False
+            for i in range(2, int(n ** 0.5) + 1):
+                if n % i == 0:
+                    return False
+            return True
+
+  assignment_assets:
+    files:
+      requirements.txt: |
+        # No external dependencies required for this test
+      test_data.txt: |
+        Test input data for Python script
+        Line 2
+        Line 3
+
+task_parameters:
+  script_path: "submission/main.py"
+  python_version: "3.9"
+  working_directory: "submission"
+  timeout: "30"
+  memory_limit: "128MB"
+  score: "15"
+
+verification:
+  image:
+    repository: python
+    tag: "3.9-slim"
+  script: |
+    echo "🐍 Checking Python execution output..."
+    
+    # Check if execution was successful
+    if [ -f execution-output/stdout.txt ]; then
+      echo "✅ Python script executed successfully"
+      echo "📄 Standard Output:"
+      cat execution-output/stdout.txt
+      
+      # Verify expected output
+      if grep -q "Hello, World!" execution-output/stdout.txt && \
+         grep -q "Sum of 5 + 3 = 8" execution-output/stdout.txt; then
+        echo "✅ Output verification passed"
+      else
+        echo "❌ Output verification failed"
+        exit 1
+      fi
+    else
+      echo "❌ Python script execution failed"
+      cat execution-output/stderr.txt 2>/dev/null || echo "No stderr output"
+      exit 1
+    fi
+    
+    # Check if error log exists and is empty
+    if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
+      echo "⚠️  Warnings/errors found:"
+      cat execution-output/stderr.txt
+    fi
+
+# Test variants for different Python scenarios
+variants:
+  - name: "with-imports"
+    description: "Test Python script with module imports"
+    mock_resources:
+      submission:
+        files:
+          main.py: |
+            from src.utils import factorial, is_prime
+            
+            def main():
+                print("Testing factorial function:")
+                print(f"factorial(5) = {factorial(5)}")
+                
+                print("\nTesting prime checker:")
+                for num in [2, 3, 4, 5, 17, 25]:
+                    result = "prime" if is_prime(num) else "not prime"
+                    print(f"{num} is {result}")
+            
+            if __name__ == "__main__":
+                main()
+    
+  - name: "error-handling"
+    description: "Test Python script with intentional error"
+    mock_resources:
+      submission:
+        files:
+          main.py: |
+            try:
+                result = 10 / 0
+            except ZeroDivisionError as e:
+                print(f"Caught expected error: {e}")
+                print("Error handling works correctly!")
+            
+            print("Script completed successfully despite error")
+    
+  - name: "file-io"
+    description: "Test Python script with file I/O operations"
+    mock_resources:
+      submission:
+        files:
+          main.py: |
+            # Read test data
+            try:
+                with open('../assignment-assets/test_data.txt', 'r') as f:
+                    content = f.read()
+                    print("📁 File content read successfully:")
+                    print(content.strip())
+                
+                # Write output file
+                with open('output.txt', 'w') as f:
+                    f.write("Python file I/O test completed\n")
+                    f.write(f"Input had {len(content.splitlines())} lines\n")
+                
+                print("✅ File operations completed")
+                
+            except Exception as e:
+                print(f"❌ File operation error: {e}")
+                exit(1)
