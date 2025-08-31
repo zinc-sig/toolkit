@@ -1,13 +1,16 @@
 #!/bin/bash
 
-# Toolkit Development CLI
-# Unified interface for all development operations
+# Toolkit Development CLI - Configuration-Driven Language Testing
+# Clean, robust, language-agnostic testing with yq-based YAML parsing
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLY_CMD="$SCRIPT_DIR/bin/fly"
 DOCKER_COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+
+# Source the configuration parser
+source "$SCRIPT_DIR/lib/config-parser.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,8 +31,17 @@ print_info() {
     echo -e "${YELLOW}ℹ️  $1${NC}"
 }
 
-# Check if Docker is running
-check_docker() {
+# Check dependencies
+check_dependencies() {
+    # Check if yq is available
+    if ! command -v yq &> /dev/null; then
+        print_error "yq is required but not installed. Please install yq first:"
+        echo "  wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq"
+        echo "  chmod +x yq && sudo mv yq /usr/local/bin/yq"
+        exit 1
+    fi
+    
+    # Check if Docker is running
     if ! docker info > /dev/null 2>&1; then
         print_error "Docker is not running. Please start Docker first."
         exit 1
@@ -62,7 +74,7 @@ init_minio_buckets() {
     # Get MinIO IP dynamically
     local minio_ip=$(docker inspect toolkit-minio --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
     
-    # Create buckets using MinIO client via Docker (using IP as DNS doesn't work)
+    # Create buckets using MinIO client via Docker
     docker run --rm --network toolkit-dev-network --entrypoint sh \
         minio/mc:latest -c \
         "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
@@ -74,7 +86,7 @@ init_minio_buckets() {
 
 # Start development environment
 start_env() {
-    check_docker
+    check_dependencies
     print_info "Starting development environment..."
     
     docker compose -f "$DOCKER_COMPOSE_FILE" up -d
@@ -127,83 +139,170 @@ clean_env() {
     print_success "Environment cleaned"
 }
 
-# Show status
-show_status() {
-    echo "==================================="
-    echo "Development Environment Status"
-    echo "==================================="
-    echo ""
+# Create a test pipeline from yq-parsed configuration
+create_test_pipeline_from_config() {
+    local task_name="$1"
+    local version="$2"
+    local output_file="$3"
+    local minio_ip="$4"
+    local config_file="$5"
+    local variant="$6"
     
-    # Check Docker services
-    if docker compose -f "$DOCKER_COMPOSE_FILE" ps --quiet 2>/dev/null | grep -q .; then
-        print_success "Docker services running"
-        docker compose -f "$DOCKER_COMPOSE_FILE" ps
-    else
-        print_error "Docker services not running"
+    # Load and validate the configuration
+    if ! validate_config "$config_file"; then
+        return 1
     fi
-    echo ""
     
-    # Check Concourse
-    if curl -s http://localhost:8080/api/v1/info > /dev/null 2>&1; then
-        print_success "Concourse is accessible"
+    load_test_config "$config_file"
+    
+    print_info "Using test configuration: $TEST_CONFIG_NAME"
+    [[ -n "$TEST_CONFIG_DESCRIPTION" ]] && print_info "Description: $TEST_CONFIG_DESCRIPTION"
+    [[ -n "$variant" ]] && print_info "Using variant: $variant"
+    
+    # Start building the pipeline
+    cat > "$output_file" << EOF
+# Generated from: $config_file
+# Configuration: $TEST_CONFIG_NAME
+# $TEST_CONFIG_DESCRIPTION
+
+resources:
+  - name: ghost
+    type: github-release
+    source:
+      owner: zinc-sig
+      repository: ghost
+      release: true
+      pre_release: false
+
+  - name: task-yaml
+    type: s3
+    source:
+      endpoint: http://${minio_ip}:9000
+      bucket: task-inputs
+      regexp: ${task_name}-(.*).yaml
+      access_key_id: minioadmin
+      secret_access_key: minioadmin
+      disable_ssl: true
+      use_v2_signing: true
+
+  - name: submission
+    type: mock
+    source:
+EOF
+    
+    # Add directories if they exist
+    generate_mock_directories "$config_file" "submission" "$output_file"
+    
+    # Add submission files
+    echo "      create_files:" >> "$output_file"
+    generate_mock_submission "$config_file" "$output_file"
+    
+    # Add assignment assets
+    cat >> "$output_file" << EOF
+
+  - name: assignment-assets
+    type: mock
+    source:
+EOF
+    
+    generate_mock_directories "$config_file" "assignment_assets" "$output_file"
+    echo "      create_files:" >> "$output_file"
+    generate_mock_assets "$config_file" "$output_file"
+    
+    # Add job definition
+    cat >> "$output_file" << EOF
+
+jobs:
+  - name: test-task
+    plan:
+      - in_parallel:
+        - get: ghost
+        - get: submission
+        - get: assignment-assets
+        - get: task-yaml
+
+      - task: compile
+        file: task-yaml/${task_name}-${version}.yaml
+        vars:
+EOF
+    
+    # Add task parameters (potentially overridden by variant)
+    if [[ -n "$variant" ]]; then
+        # Create temporary merged config
+        local temp_config=$(mktemp)
+        local base_params=$(yq eval '.task_parameters' "$config_file")
+        local variant_params=$(get_variant_config "$config_file" "$variant" | yq eval '.task_parameters // {}' -)
         
-        # List pipelines
-        if [ -f "$FLY_CMD" ]; then
-            echo ""
-            echo "Active pipelines:"
-            $FLY_CMD -t dev pipelines 2>/dev/null || echo "  No pipelines configured"
-        fi
+        # Simple merge: base params + variant overrides
+        {
+            echo "task_parameters:"
+            echo "$base_params" | yq eval 'to_entries | .[] | "  " + .key + ": " + (.value | @json)' -
+            echo "$variant_params" | yq eval 'to_entries | .[] | "  " + .key + ": " + (.value | @json)' -
+        } > "$temp_config"
+        
+        generate_task_parameters "$temp_config" "$output_file"
+        rm -f "$temp_config"
     else
-        print_error "Concourse is not accessible"
+        generate_task_parameters "$config_file" "$output_file"
     fi
-    echo ""
     
-    # Check MinIO
-    if curl -s http://localhost:9000/minio/health/live > /dev/null 2>&1; then
-        print_success "MinIO is accessible"
+    # Add ghost configuration
+    cat >> "$output_file" << EOF
+        params:
+          GHOST_UPLOAD_CONFIG_ENDPOINT: http://${minio_ip}:9000
+          GHOST_UPLOAD_CONFIG_ACCESS_KEY: minioadmin
+          GHOST_UPLOAD_CONFIG_SECRET_KEY: minioadmin
+          GHOST_UPLOAD_CONFIG_BUCKET: task-outputs
+
+      - task: verify
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: $TEST_VERIFY_IMAGE_REPO
+              tag: $TEST_VERIFY_IMAGE_TAG
+          inputs:
+            - name: compilation-output
+              optional: true
+          run:
+            path: sh
+            args:
+              - -c
+              - |
+EOF
+    
+    # Add verification script
+    if [[ -n "$TEST_VERIFY_SCRIPT" ]]; then
+        # Indent the script properly
+        echo "$TEST_VERIFY_SCRIPT" | sed 's/^/                /' >> "$output_file"
+    elif [[ -n "$TEST_VERIFY_SCRIPT_FILE" ]] && [[ -f "$TEST_VERIFY_SCRIPT_FILE" ]]; then
+        # Load external script file
+        sed 's/^/                /' "$TEST_VERIFY_SCRIPT_FILE" >> "$output_file"
     else
-        print_error "MinIO is not accessible"
+        cat >> "$output_file" << 'EOF'
+                echo "No verification script provided"
+                echo "Contents of compilation-output:"
+                ls -la compilation-output/ 2>/dev/null || echo "No output directory"
+EOF
     fi
 }
 
-# Test a task file (old method - kept for compatibility)
-test_task() {
-    local task_file="$1"
-    
-    if [ -z "$task_file" ]; then
-        print_error "Usage: $0 test <task-file.yaml>"
-        exit 1
-    fi
-    
-    if [ ! -f "$task_file" ]; then
-        print_error "Task file not found: $task_file"
-        exit 1
-    fi
-    
-    check_fly
-    
-    print_info "Testing task: $task_file"
-    
-    # Prepare mock inputs
-    MOCK_DIR="$SCRIPT_DIR/mock-resources"
-    
-    $FLY_CMD -t dev execute -c "$task_file" \
-        -i submission="$MOCK_DIR/submissions" \
-        -i assignment-assets="$MOCK_DIR/assignment-assets" \
-        -i ghost="$MOCK_DIR/ghost"
-}
-
-# Test a toolkit task YAML with MinIO integration
+# Test a task file with configuration-driven approach
 test_task_yaml() {
     local task_path="$1"
+    local config_path="$2"
+    local variant="$3"
+    local show_summary="$4"
     
     if [ -z "$task_path" ]; then
-        print_error "Usage: $0 test <task-path>"
+        print_error "Usage: $0 test <task-path> [--config <config-file>] [--variant <variant>] [--summary]"
         echo ""
         echo "Examples:"
         echo "  $0 test compilation/gcc.yaml"
-        echo "  $0 test execution/stdio.yaml"
-        echo "  $0 test testing/diff.yaml"
+        echo "  $0 test compilation/java.yaml --variant classes-only"
+        echo "  $0 test compilation/python.yaml --config my-custom.yaml"
+        echo "  $0 test compilation/gcc.yaml --summary"
         exit 1
     fi
     
@@ -214,14 +313,63 @@ test_task_yaml() {
         exit 1
     fi
     
+    check_dependencies
     check_fly
+    
+    # Find or use provided config
+    if [ -z "$config_path" ]; then
+        config_path=$(find_test_config "$task_path")
+        if [ $? -ne 0 ]; then
+            print_error "No test configuration found for $task_path"
+            print_info "Create a configuration at: test-configs/$task_path"
+            echo ""
+            echo "Quick template:"
+            cat << 'EOF'
+---
+name: My Task Test
+mock_resources:
+  submission:
+    files:
+      main.ext: |
+        # Your test code here
+task_parameters:
+  param1: value1
+  param2: value2
+verification:
+  image:
+    repository: appropriate-image
+  script: |
+    echo "Verification commands here"
+EOF
+            exit 1
+        fi
+    fi
+    
+    # Show configuration summary if requested
+    if [[ "$show_summary" == "true" ]]; then
+        show_config_summary "$config_path"
+        echo ""
+        return 0
+    fi
+    
+    # Validate variant if provided
+    if [[ -n "$variant" ]]; then
+        if ! get_variant_config "$config_path" "$variant" > /dev/null; then
+            print_error "Variant '$variant' not found in configuration"
+            echo "Available variants:"
+            list_variants "$config_path" | sed 's/^/  - /'
+            exit 1
+        fi
+    fi
     
     # Extract task type and name
     local task_type=$(echo "$task_path" | cut -d'/' -f1)
     local task_name=$(basename "$task_path" .yaml)
     local pipeline_name="${task_name}-test"
+    [[ -n "$variant" ]] && pipeline_name="${task_name}-${variant}-test"
     
     print_info "Testing $task_type task: $task_name"
+    print_info "Using configuration: $config_path"
     
     # Get MinIO IP dynamically
     local minio_ip=$(docker inspect toolkit-minio --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
@@ -244,70 +392,28 @@ test_task_yaml() {
         exit 1
     fi
     
-    # Create test pipeline based on task type
-    local pipeline_file="$SCRIPT_DIR/.test-${task_name}.yml"
-    
-    if [ "$task_type" = "compilation" ]; then
-        create_compilation_test_pipeline "$task_name" "$version" "$pipeline_file" "$minio_ip"
-    elif [ "$task_type" = "execution" ]; then
-        create_execution_test_pipeline "$task_name" "$version" "$pipeline_file" "$minio_ip"
-    elif [ "$task_type" = "testing" ]; then
-        create_testing_test_pipeline "$task_name" "$version" "$pipeline_file" "$minio_ip"
-    else
-        print_error "Unknown task type: $task_type"
-        exit 1
-    fi
+    # Create test pipeline from configuration
+    local pipeline_file="$SCRIPT_DIR/.test-${task_name}${variant:+-$variant}.yml"
+    create_test_pipeline_from_config "$task_name" "$version" "$pipeline_file" "$minio_ip" "$config_path" "$variant"
     
     # Deploy pipeline
     print_info "Deploying test pipeline..."
     $FLY_CMD -t dev set-pipeline -p "$pipeline_name" -c "$pipeline_file" -n > /dev/null 2>&1
     
-    # Unpause the pipeline (pipelines are paused by default)
+    # Unpause the pipeline
     $FLY_CMD -t dev unpause-pipeline -p "$pipeline_name" > /dev/null 2>&1
     
     # Trigger job
     print_info "Running test..."
     $FLY_CMD -t dev trigger-job -j "$pipeline_name/test-task" --watch
     
-    # Check results in MinIO based on task type
+    # Check results in MinIO
     print_info "Checking results in MinIO..."
-    if [ "$task_type" = "compilation" ]; then
-        docker run --rm --network toolkit-dev-network \
-            --entrypoint sh minio/mc:latest -c \
-            "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
-             echo '📦 Files uploaded to compilation-outputs:' && \
-             mc ls minio/compilation-outputs/ 2>/dev/null || echo 'No files in compilation-outputs' && \
-             echo '' && \
-             echo '📦 Files uploaded to task-outputs (by ghost):' && \
-             mc ls minio/task-outputs/ 2>/dev/null || echo 'No files in task-outputs'"
-    elif [ "$task_type" = "execution" ]; then
-        docker run --rm --network toolkit-dev-network \
-            --entrypoint sh minio/mc:latest -c \
-            "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
-             echo '📦 Files uploaded to execution-outputs:' && \
-             mc ls minio/execution-outputs/ 2>/dev/null || echo 'No files in execution-outputs' && \
-             echo '' && \
-             echo '📦 Files uploaded to task-outputs (by ghost):' && \
-             mc ls minio/task-outputs/ 2>/dev/null || echo 'No files in task-outputs'"
-    elif [ "$task_type" = "testing" ]; then
-        docker run --rm --network toolkit-dev-network \
-            --entrypoint sh minio/mc:latest -c \
-            "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
-             echo '📦 Files uploaded to testing-outputs:' && \
-             mc ls minio/testing-outputs/ 2>/dev/null || echo 'No files in testing-outputs' && \
-             echo '' && \
-             echo '📦 Files uploaded to task-outputs (by ghost):' && \
-             mc ls minio/task-outputs/ 2>/dev/null || echo 'No files in task-outputs'"
-    else
-        docker run --rm --network toolkit-dev-network \
-            --entrypoint sh minio/mc:latest -c \
-            "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
-             echo '📦 All MinIO buckets:' && \
-             mc ls minio/ && \
-             echo '' && \
-             echo '📦 Files in task-outputs:' && \
-             mc ls minio/task-outputs/ 2>/dev/null || echo 'No files in task-outputs'"
-    fi
+    docker run --rm --network toolkit-dev-network \
+        --entrypoint sh minio/mc:latest -c \
+        "mc alias set minio http://${minio_ip}:9000 minioadmin minioadmin && \
+         echo '📦 Files in task-outputs:' && \
+         mc ls minio/task-outputs/ 2>/dev/null || echo 'No files in task-outputs'"
     
     # Cleanup
     print_info "Cleaning up..."
@@ -317,438 +423,44 @@ test_task_yaml() {
     print_success "Test completed!"
 }
 
-# Create compilation test pipeline
-create_compilation_test_pipeline() {
-    local task_name="$1"
-    local version="$2"
-    local output_file="$3"
-    local minio_ip="$4"
-    
-    cat > "$output_file" << EOF
-resources:
-  - name: ghost
-    type: github-release
-    source:
-      owner: zinc-sig
-      repository: ghost
-      release: true
-      pre_release: false
-
-  - name: task-yaml
-    type: s3
-    source:
-      endpoint: http://${minio_ip}:9000
-      bucket: task-inputs
-      regexp: ${task_name}-(.*).yaml
-      access_key_id: minioadmin
-      secret_access_key: minioadmin
-      disable_ssl: true
-      use_v2_signing: true
-
-  - name: submission
-    type: mock
-    source:
-      create_files:
-        hello.c: |
-          #include <stdio.h>
-          int main() {
-              printf("Hello, World!\\n");
-              printf("Testing compilation task!\\n");
-              return 0;
-          }
-
-  - name: assignment-assets
-    type: mock
-    source:
-      create_files:
-        placeholder.txt: "placeholder"
-
-jobs:
-  - name: test-task
-    plan:
-      - in_parallel:
-        - get: ghost
-        - get: submission
-        - get: assignment-assets
-        - get: task-yaml
-
-      - task: compile
-        file: task-yaml/${task_name}-${version}.yaml
-        vars:
-          source_file: submission/hello.c
-          output_binary: hello
-          compiler_flags: "-Wall -Wextra -O2"
-          language: c
-          score: "10"
-        params:
-          GHOST_UPLOAD_CONFIG_ENDPOINT: http://${minio_ip}:9000
-          GHOST_UPLOAD_CONFIG_ACCESS_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_SECRET_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_BUCKET: task-outputs
-
-      - task: verify
-        config:
-          platform: linux
-          image_resource:
-            type: registry-image
-            source: {repository: busybox}
-          inputs:
-            - name: compilation-output
-              optional: true
-          run:
-            path: sh
-            args:
-              - -c
-              - |
-                echo "Checking compilation output..."
-                if [ -f compilation-output/hello ]; then
-                  echo "✅ Binary created successfully"
-                  chmod +x compilation-output/hello
-                  echo "Running binary:"
-                  ./compilation-output/hello
-                else
-                  echo "❌ Binary not found"
-                  exit 1
-                fi
-EOF
-}
-
-# Create execution test pipeline
-create_execution_test_pipeline() {
-    local task_name="$1"
-    local version="$2"
-    local output_file="$3"
-    local minio_ip="$4"
-    
-    cat > "$output_file" << EOF
-resources:
-  - name: ghost
-    type: github-release
-    source:
-      owner: zinc-sig
-      repository: ghost
-      release: true
-      pre_release: false
-
-  - name: task-yaml
-    type: s3
-    source:
-      endpoint: http://${minio_ip}:9000
-      bucket: task-inputs
-      regexp: ${task_name}-(.*).yaml
-      access_key_id: minioadmin
-      secret_access_key: minioadmin
-      disable_ssl: true
-      use_v2_signing: true
-
-  - name: compilation-output
-    type: mock
-    source:
-      create_files:
-        program: |
-          #!/bin/sh
-          echo "Hello from test program!"
-          echo "Input received:"
-          cat
-
-  - name: submission
-    type: mock
-    source:
-      create_files:
-        placeholder.txt: "placeholder for submission"
-
-  - name: assignment-assets
-    type: mock
-    source:
-      create_files:
-        input.txt: |
-          Test input line 1
-          Test input line 2
-
-jobs:
-  - name: test-task
-    plan:
-      - in_parallel:
-        - get: ghost
-        - get: compilation-output
-        - get: submission
-        - get: assignment-assets
-        - get: task-yaml
-
-      - task: prepare-binary
-        config:
-          platform: linux
-          image_resource:
-            type: registry-image
-            source: {repository: busybox}
-          inputs:
-            - name: compilation-output
-          outputs:
-            - name: compilation-output-fixed
-          run:
-            path: sh
-            args:
-              - -c
-              - |
-                cp -r compilation-output/* compilation-output-fixed/
-                chmod +x compilation-output-fixed/program
-
-      - task: execute
-        file: task-yaml/${task_name}-${version}.yaml
-        input_mapping:
-          compilation-output: compilation-output-fixed
-        vars:
-          execution_binary: compilation-output/program
-          execution_flags: ""
-          input_path: assignment-assets/input.txt
-          output_path: output.txt
-          stderr_path: stderr.txt
-          score: "10"
-        params:
-          GHOST_UPLOAD_CONFIG_ENDPOINT: http://${minio_ip}:9000
-          GHOST_UPLOAD_CONFIG_ACCESS_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_SECRET_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_BUCKET: task-outputs
-
-      - task: verify
-        config:
-          platform: linux
-          image_resource:
-            type: registry-image
-            source: {repository: busybox}
-          inputs:
-            - name: execution-output
-              optional: true
-          run:
-            path: sh
-            args:
-              - -c
-              - |
-                echo "Checking execution output..."
-                if [ -f execution-output/output.txt ]; then
-                  echo "✅ Output file created"
-                  echo "Program output:"
-                  cat execution-output/output.txt
-                else
-                  echo "❌ Output file not found"
-                  exit 1
-                fi
-EOF
-}
-
-# Create testing test pipeline (for diff.yaml)
-create_testing_test_pipeline() {
-    local task_name="$1"
-    local version="$2"
-    local output_file="$3"
-    local minio_ip="$4"
-    
-    cat > "$output_file" << EOF
-resources:
-  - name: ghost
-    type: github-release
-    source:
-      owner: zinc-sig
-      repository: ghost
-      release: true
-      pre_release: false
-
-  - name: task-yaml
-    type: s3
-    source:
-      endpoint: http://${minio_ip}:9000
-      bucket: task-inputs
-      regexp: ${task_name}-(.*).yaml
-      access_key_id: minioadmin
-      secret_access_key: minioadmin
-      disable_ssl: true
-      use_v2_signing: true
-
-  - name: execution-output
-    type: mock
-    source:
-      create_files:
-        output.txt: |
-          Hello, World!
-          Test output line 2
-
-  - name: assignment-assets
-    type: mock
-    source:
-      create_files:
-        expected.txt: |
-          Hello, World!
-          Test output line 2
-
-jobs:
-  - name: test-task
-    plan:
-      - in_parallel:
-        - get: ghost
-        - get: execution-output
-        - get: assignment-assets
-        - get: task-yaml
-
-      - task: test-diff
-        file: task-yaml/${task_name}-${version}.yaml
-        vars:
-          input_path: execution-output/output.txt
-          expected_path: assignment-assets/expected.txt
-          output_path: result.txt
-          stderr_path: stderr.txt
-          diff_flags: ""
-          score: "10"
-        params:
-          GHOST_UPLOAD_CONFIG_ENDPOINT: http://${minio_ip}:9000
-          GHOST_UPLOAD_CONFIG_ACCESS_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_SECRET_KEY: minioadmin
-          GHOST_UPLOAD_CONFIG_BUCKET: task-outputs
-
-      - task: verify
-        config:
-          platform: linux
-          image_resource:
-            type: registry-image
-            source: {repository: busybox}
-          inputs:
-            - name: testing-output
-              optional: true
-          run:
-            path: sh
-            args:
-              - -c
-              - |
-                echo "Checking testing output..."
-                if [ -f testing-output/result.txt ]; then
-                  echo "✅ Test result created"
-                  echo "Test result:"
-                  cat testing-output/result.txt
-                else
-                  echo "❌ Test result not found"
-                fi
-EOF
-}
-
-# Test a toolkit task YAML with proper environment (OLD - kept for compatibility)
-task_test() {
-    # Redirect to new function
-    test_task_yaml "$@"
-}
-
-# Deploy a pipeline
-deploy_pipeline() {
-    local pipeline_file="$1"
-    local pipeline_name="${2:-test}"
-    
-    if [ -z "$pipeline_file" ]; then
-        print_error "Usage: $0 pipeline <pipeline.yml> [pipeline-name]"
-        exit 1
-    fi
-    
-    if [ ! -f "$pipeline_file" ]; then
-        print_error "Pipeline file not found: $pipeline_file"
-        exit 1
-    fi
-    
-    check_fly
-    
-    print_info "Deploying pipeline: $pipeline_name"
-    
-    $FLY_CMD -t dev set-pipeline -p "$pipeline_name" -c "$pipeline_file" -n
-    $FLY_CMD -t dev unpause-pipeline -p "$pipeline_name"
-    
-    print_success "Pipeline deployed!"
-    echo "  View at: http://localhost:8080/teams/main/pipelines/$pipeline_name"
-}
-
-# Run example pipeline
-run_example() {
-    local example_file="$SCRIPT_DIR/examples/simple-pipeline.yml"
-    
-    if [ ! -f "$example_file" ]; then
-        print_error "Example pipeline not found. Creating one..."
-        mkdir -p "$SCRIPT_DIR/examples"
-        create_simple_example
-    fi
-    
-    deploy_pipeline "$example_file" "example"
-    
-    print_info "Triggering example job..."
-    $FLY_CMD -t dev trigger-job -j example/test --watch
-}
-
-# Create a simple example if it doesn't exist
-create_simple_example() {
-    cat > "$SCRIPT_DIR/examples/simple-pipeline.yml" << 'EOF'
-# Simple example pipeline for testing
-resources:
-  - name: code
-    type: mock
-    source:
-      create_files:
-        main.c: |
-          #include <stdio.h>
-          int main() {
-              printf("Hello from toolkit dev environment!\n");
-              return 0;
-          }
-
-jobs:
-  - name: test
-    plan:
-      - get: code
-        trigger: true
-      - task: compile-and-run
-        config:
-          platform: linux
-          image_resource:
-            type: registry-image
-            source:
-              repository: gcc
-              tag: latest
-          inputs:
-            - name: code
-          run:
-            path: bash
-            args:
-              - -c
-              - |
-                echo "Compiling C code..."
-                gcc code/main.c -o program
-                echo "Running program..."
-                ./program
-                echo "Success!"
-EOF
-}
-
 # Show help
 show_help() {
     cat << EOF
-Toolkit Development CLI
+Toolkit Development CLI - Configuration-Driven Language Testing
 
 Usage: $0 <command> [options]
 
 Commands:
   start      Start the development environment
-  stop       Stop the development environment
+  stop       Stop the development environment  
   clean      Clean everything (containers, volumes, pipelines)
-  status     Show environment status
-  test       Test a task YAML with automatic MinIO upload
-             Example: $0 test compilation/gcc.yaml
-             Example: $0 test execution/stdio.yaml
-             Example: $0 test testing/diff.yaml
-  pipeline   Deploy a pipeline
-             Example: $0 pipeline my-pipeline.yml my-pipeline
-  example    Run a simple example pipeline
+  test       Test a task with configuration-driven setup
   help       Show this help message
 
+Test Command Options:
+  --config FILE    Use specific configuration file
+  --variant NAME   Use specific test variant
+  --summary        Show configuration summary without running test
+
 Examples:
-  $0 start                      # Start environment
-  $0 test compilation/gcc.yaml  # Test gcc compilation task
-  $0 test execution/stdio.yaml  # Test stdio execution task
-  $0 test testing/diff.yaml     # Test diff testing task
-  $0 status                     # Check status
-  $0 clean                      # Clean everything
+  $0 start                                    # Start environment
+  $0 test compilation/gcc.yaml                # Auto-discover config
+  $0 test compilation/java.yaml --variant classes-only
+  $0 test compilation/python.yaml --config custom.yaml
+  $0 test compilation/gcc.yaml --summary      # Show config info only
+
+Adding New Language Support:
+  1. Create task file: compilation/newlang.yaml
+  2. Create test config: test-configs/compilation/newlang.test.yaml  
+  3. Run: $0 test compilation/newlang.yaml
+  ✨ No code changes to this script needed!
+
+Configuration Features:
+  ✅ Automatic config discovery
+  ✅ Test variants for different scenarios
+  ✅ Mock resource generation
+  ✅ Flexible verification scripts
+  ✅ YAML validation with helpful errors
 
 EOF
 }
@@ -764,21 +476,36 @@ case "${1:-help}" in
     clean)
         clean_env
         ;;
-    status)
-        show_status
-        ;;
     test)
-        test_task_yaml "$2"
-        ;;
-    task-test)
-        shift  # Remove the command
-        test_task_yaml "$@"
-        ;;
-    pipeline|deploy)
-        deploy_pipeline "$2" "$3"
-        ;;
-    example)
-        run_example
+        shift
+        config_path=""
+        task_path=""
+        variant=""
+        show_summary="false"
+        
+        # Parse arguments
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --config|-c)
+                    config_path="$2"
+                    shift 2
+                    ;;
+                --variant|-v)
+                    variant="$2"
+                    shift 2
+                    ;;
+                --summary|-s)
+                    show_summary="true"
+                    shift
+                    ;;
+                *)
+                    task_path="$1"
+                    shift
+                    ;;
+            esac
+        done
+        
+        test_task_yaml "$task_path" "$config_path" "$variant" "$show_summary"
         ;;
     help|--help|-h)
         show_help

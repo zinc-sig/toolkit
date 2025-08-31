@@ -1,11 +1,103 @@
----
 platform: linux
-
 image_resource:
   type: registry-image
   source:
-    repository:
-
+    repository: openjdk
+    tag: 11-jdk
+inputs:
+  - name: submission
+  - name: assignment-assets
+  - name: ghost
+outputs:
+  - name: compilation-output
+params:
+  SOURCE_PATTERN: ((source_pattern))
+  MAIN_CLASS: ((main_class))
+  OUTPUT_TYPE: ((output_type))
+  OUTPUT_NAME: ((output_name))
+  CLASSPATH: ((classpath))
+  COMPILER_FLAGS: ((compiler_flags))
+  SCORE: ((score))
 run:
-  path:
+  path: bash
   args:
+    - '-c'
+    - |
+      set -e
+      
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+      
+      # Setup classpath if provided
+      FULL_CLASSPATH="."
+      if [ -n "${CLASSPATH}" ]; then
+        FULL_CLASSPATH="${CLASSPATH}:."
+      fi
+      
+      # Find all Java files matching the pattern
+      echo "Finding Java files with pattern: ${SOURCE_PATTERN}"
+      JAVA_FILES=$(find ${SOURCE_PATTERN} 2>/dev/null | tr '\n' ' ')
+      
+      if [ -z "$JAVA_FILES" ]; then
+        echo "Error: No Java files found matching pattern: ${SOURCE_PATTERN}"
+        exit 1
+      fi
+      
+      echo "Found Java files: $JAVA_FILES"
+      
+      # Create output directory
+      mkdir -p compilation-output
+      
+      # Compile based on output type
+      if [ "${OUTPUT_TYPE}" = "jar" ]; then
+        echo "Compiling Java files and creating JAR: ${OUTPUT_NAME}"
+        
+        # Create classes directory for compilation
+        mkdir -p compilation-output/classes
+        
+        # Compile and create JAR with ghost tracking
+        ./ghost/ghost-linux-amd64 run --verbose \
+          -i /dev/null \
+          -o compile.log \
+          -e compile.err \
+          --score "${SCORE}" \
+          --upload-provider "minio" \
+          --upload-files "compilation-output/${OUTPUT_NAME}:${OUTPUT_NAME}" \
+          -- bash -c "
+            # Compile Java files
+            javac -cp \"${FULL_CLASSPATH}\" ${COMPILER_FLAGS} -d compilation-output/classes ${JAVA_FILES} && \
+            
+            # Create manifest with Main-Class if specified
+            if [ -n \"${MAIN_CLASS}\" ]; then
+              echo \"Main-Class: ${MAIN_CLASS}\" > compilation-output/MANIFEST.MF
+              echo \"\" >> compilation-output/MANIFEST.MF
+              
+              # Create JAR with manifest
+              cd compilation-output/classes && \
+              jar cfm ../${OUTPUT_NAME} ../MANIFEST.MF . && \
+              cd ../.. && \
+              echo \"JAR created successfully: compilation-output/${OUTPUT_NAME}\"
+            else
+              # Create JAR without manifest
+              cd compilation-output/classes && \
+              jar cf ../${OUTPUT_NAME} . && \
+              cd ../.. && \
+              echo \"JAR created successfully: compilation-output/${OUTPUT_NAME}\"
+            fi
+          "
+      else
+        echo "Compiling Java files to .class files"
+        
+        # Just compile to .class files with ghost tracking
+        ./ghost/ghost-linux-amd64 run --verbose \
+          -i /dev/null \
+          -o compile.log \
+          -e compile.err \
+          --score "${SCORE}" \
+          --upload-provider "minio" \
+          -- javac -cp "${FULL_CLASSPATH}" ${COMPILER_FLAGS} -d compilation-output ${JAVA_FILES}
+        
+        # List compiled files for verification
+        echo "Compiled class files:"
+        find compilation-output -name "*.class" -type f
+      fi

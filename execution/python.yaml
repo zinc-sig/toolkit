@@ -4,8 +4,49 @@ platform: linux
 image_resource:
   type: registry-image
   source:
-    repository:
+    repository: python
+    tag: "3.9-slim"
+
+inputs:
+  - name: ghost
+  - name: submission
+  - name: assignment-assets
+
+outputs:
+  - name: execution-output
+
+params:
+  SCRIPT_PATH: ((script_path))
+  PYTHON_VERSION: ((python_version))
+  WORKING_DIRECTORY: ((working_directory))
+  TIMEOUT: ((timeout))
+  MEMORY_LIMIT: ((memory_limit))
+  SCORE: ((score))
 
 run:
-  path:
+  path: bash
   args:
+    - -c
+    - |
+      # Make ghost executable
+      chmod +x ghost/ghost-linux-amd64
+
+      # Set working directory
+      cd "${WORKING_DIRECTORY}"
+
+      # Install any requirements if they exist
+      if [ -f "../assignment-assets/requirements.txt" ]; then
+        echo "📦 Installing Python requirements..."
+        pip install -r "../assignment-assets/requirements.txt"
+      fi
+
+      # Execute Python script with ghost
+      echo "🐍 Executing Python script: ${SCRIPT_PATH}"
+      ../ghost/ghost-linux-amd64 run --verbose \
+        -o ../execution-output/stdout.txt \
+        -e ../execution-output/stderr.txt \
+        --score "${SCORE}" \
+        --upload-provider "minio" \
+        --upload-files "stdout.txt:execution-output/stdout.txt,stderr.txt:execution-output/stderr.txt" \
+        --timeout "${TIMEOUT}" \
+        -- python3 "${SCRIPT_PATH##*/}"

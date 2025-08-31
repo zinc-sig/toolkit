@@ -1,0 +1,39 @@
+---
+name: Java Compile
+description: Compiles Java source files using javac compiler
+parameters:
+  - name: source_pattern
+    type: string
+    description: Pattern to find Java source files
+    default: submission/*.java
+    example: submission/**/*.java
+  - name: main_class
+    type: string
+    description: Main class for JAR manifest (fully qualified name)
+    default: Main
+    example: com.example.App
+  - name: output_type
+    type: string
+    description: Output format (classes or jar)
+    default: classes
+    example: jar
+  - name: output_name
+    type: string
+    description: JAR filename (only used if output_type is jar)
+    default: app.jar
+    example: application.jar
+  - name: classpath
+    type: string
+    description: Additional classpath entries (separated by colon)
+    default: ""
+    example: assignment-assets/lib/*:assignment-assets/deps/*
+  - name: compiler_flags
+    type: string
+    description: Additional javac compiler flags
+    default: "-Xlint:all"
+    example: "-Xlint:all -encoding UTF-8 -Werror"
+  - name: score
+    type: string
+    description: Score to assign if compilation succeeds
+    default: "0"
+    example: "10"

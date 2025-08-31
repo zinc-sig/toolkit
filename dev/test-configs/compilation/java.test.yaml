@@ -1,0 +1,120 @@
+---
+name: Java Compilation Test
+description: Test configuration for Java compilation task
+
+mock_resources:
+  submission:
+    files:
+      Main.java: |
+        import java.util.Scanner;
+        
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("Hello from Java!");
+                System.out.println("Testing Java compilation task!");
+                
+                // Test with input if available
+                Scanner scanner = new Scanner(System.in);
+                if (scanner.hasNextLine()) {
+                    String input = scanner.nextLine();
+                    System.out.println("Input received: " + input);
+                }
+                scanner.close();
+            }
+        }
+  
+  assignment_assets:
+    files:
+      placeholder.txt: "placeholder"
+
+task_parameters:
+  source_pattern: "submission/*.java"
+  main_class: "Main"
+  output_type: "jar"
+  output_name: "app.jar"
+  classpath: ""
+  compiler_flags: "-Xlint:all"
+  score: "10"
+
+verification:
+  image:
+    repository: openjdk
+    tag: 11-jdk
+  script: |
+    echo "Checking Java compilation output..."
+    if [ -f compilation-output/app.jar ]; then
+      echo "✅ JAR created successfully"
+      echo "Running JAR:"
+      java -jar compilation-output/app.jar < /dev/null
+      echo ""
+      echo "JAR contents:"
+      jar tf compilation-output/app.jar
+    elif [ -d compilation-output ] && find compilation-output -name "*.class" | grep -q .; then
+      echo "✅ Class files created successfully"
+      echo "Class files:"
+      find compilation-output -name "*.class"
+    else
+      echo "❌ No JAR or class files found"
+      exit 1
+    fi
+
+# Test variants for different scenarios
+variants:
+  - name: "classes-only"
+    description: "Compile to .class files without JAR"
+    task_parameters:
+      output_type: "classes"
+      output_name: ""
+    verification:
+      script: |
+        echo "Checking .class files..."
+        if find compilation-output -name "*.class" | grep -q .; then
+          echo "✅ Class files created:"
+          find compilation-output -name "*.class"
+          echo "Running Main class:"
+          cd compilation-output && java Main
+        else
+          echo "❌ No class files found"
+          exit 1
+        fi
+  
+  - name: "package-structure"
+    description: "Test with package structure"
+    mock_resources:
+      submission:
+        directories:
+          - "com/example"
+        files:
+          com/example/App.java: |
+            package com.example;
+            
+            public class App {
+                public static void main(String[] args) {
+                    Helper helper = new Helper();
+                    System.out.println("Main App running!");
+                    System.out.println(helper.getMessage());
+                }
+            }
+          com/example/Helper.java: |
+            package com.example;
+            
+            public class Helper {
+                public String getMessage() {
+                    return "Hello from Helper class!";
+                }
+            }
+    task_parameters:
+      source_pattern: "submission/**/*.java"
+      main_class: "com.example.App"
+      output_type: "jar"
+      output_name: "package-app.jar"
+  
+  - name: "with-external-libs"
+    description: "Test with external library dependencies"
+    mock_resources:
+      assignment_assets:
+        files:
+          lib/commons-lang3.jar: "mock-jar-content"
+    task_parameters:
+      classpath: "assignment-assets/lib/*"
+      compiler_flags: "-Xlint:all -encoding UTF-8"

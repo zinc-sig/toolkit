@@ -1,0 +1,72 @@
+---
+name: GCC Compilation Test
+description: Test configuration for GCC C/C++ compilation task
+
+mock_resources:
+  submission:
+    files:
+      hello.c: |
+        #include <stdio.h>
+        int main() {
+            printf("Hello, World!\n");
+            printf("Testing compilation task!\n");
+            return 0;
+        }
+  
+  assignment_assets:
+    files:
+      placeholder.txt: "placeholder"
+
+task_parameters:
+  source_file: "submission/hello.c"
+  output_binary: "hello"
+  compiler_flags: "-Wall -Wextra -O2"
+  language: "c"
+  score: "10"
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  script: |
+    echo "Checking compilation output..."
+    if [ -f compilation-output/hello ]; then
+      echo "✅ Binary created successfully"
+      chmod +x compilation-output/hello
+      echo "Running binary:"
+      ./compilation-output/hello
+    else
+      echo "❌ Binary not found"
+      exit 1
+    fi
+
+# Optional test variants
+variants:
+  - name: "cpp-compilation"
+    description: "Test C++ compilation"
+    mock_resources:
+      submission:
+        files:
+          hello.cpp: |
+            #include <iostream>
+            int main() {
+                std::cout << "Hello from C++!" << std::endl;
+                std::cout << "Testing C++ compilation!" << std::endl;
+                return 0;
+            }
+    task_parameters:
+      source_file: "submission/hello.cpp"
+      output_binary: "hello_cpp"
+      compiler_flags: "-Wall -Wextra -std=c++17"
+      language: "cpp"
+      score: "10"
+  
+  - name: "with-warnings-as-errors"
+    description: "Test compilation with -Werror flag"
+    task_parameters:
+      compiler_flags: "-Wall -Wextra -Werror -O2"
+  
+  - name: "optimized-build"
+    description: "Test with maximum optimization"
+    task_parameters:
+      compiler_flags: "-O3 -march=native"
