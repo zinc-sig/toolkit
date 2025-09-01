@@ -1,0 +1,41 @@
+---
+name: Test Configuration
+description: A valid test configuration for testing
+
+mock_resources:
+  submission:
+    files:
+      main.c: |
+        #include <stdio.h>
+        int main() {
+            printf("Hello, World!\n");
+            return 0;
+        }
+      helper.c: |
+        int add(int a, int b) {
+            return a + b;
+        }
+  
+  assignment_assets:
+    files:
+      input.txt: |
+        test input
+      expected.txt: |
+        expected output
+
+task_parameters:
+  source_file: "submission/main.c"
+  output_binary: "main"
+  compiler_flags: "-Wall -O2"
+  language: "c"
+  score: "10"
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  script: |
+    echo "Checking output..."
+    if [ -f compilation-output/main ]; then
+      echo "Success"
+    fi

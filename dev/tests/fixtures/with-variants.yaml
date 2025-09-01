@@ -1,0 +1,44 @@
+---
+name: Configuration with Variants
+description: Test configuration with multiple variants
+
+mock_resources:
+  submission:
+    files:
+      main.py: |
+        print("Default")
+  
+  assignment_assets:
+    files:
+      placeholder.txt: "placeholder"
+
+task_parameters:
+  script_path: "submission/main.py"
+  timeout: "30s"
+  score: "10"
+
+verification:
+  image:
+    repository: python
+    tag: "3.9-slim"
+  script: |
+    echo "Default verification"
+
+variants:
+  - name: "debug-mode"
+    description: "Run with debug flags"
+    task_parameters:
+      debug: "true"
+      verbose: "true"
+  
+  - name: "optimized"
+    description: "Run with optimization"
+    task_parameters:
+      optimization_level: "O3"
+      strip_symbols: "true"
+  
+  - name: "custom-verification"
+    description: "Variant with custom verification"
+    verification:
+      script: |
+        echo "Custom variant verification"

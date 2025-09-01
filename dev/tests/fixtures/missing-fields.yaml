@@ -1,0 +1,11 @@
+---
+name: Missing Fields Config
+description: Missing required fields for testing validation
+
+mock_resources:
+  submission:
+    files:
+      test.py: |
+        print('test')
+
+# Missing task_parameters and verification sections

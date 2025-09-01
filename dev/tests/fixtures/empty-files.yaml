@@ -1,0 +1,18 @@
+---
+name: Empty Files Configuration
+description: Configuration with no mock files defined
+
+mock_resources:
+  submission: {}
+  
+  assignment_assets: {}
+
+task_parameters:
+  some_param: "value"
+
+verification:
+  image:
+    repository: alpine
+    tag: latest
+  script: |
+    echo "Testing empty files"

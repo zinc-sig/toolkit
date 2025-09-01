@@ -150,6 +150,45 @@ has_variants() {
     yq eval '.variants | length > 0' "$config_file" 2>/dev/null
 }
 
+# Merge variant configuration with base configuration
+# Usage: merge_variant_with_base config.yaml "variant_name"
+# Output: Merged configuration to stdout
+merge_variant_with_base() {
+    local config_file="$1"
+    local variant_name="$2"
+    
+    if [[ ! -f "$config_file" ]]; then
+        echo "Error: Configuration file not found: $config_file" >&2
+        return 1
+    fi
+    
+    # Check if variant exists
+    local variant_exists=$(yq eval ".variants[] | select(.name == \"${variant_name}\") | .name" "$config_file" 2>/dev/null)
+    if [[ -z "$variant_exists" ]]; then
+        echo "Error: Variant '${variant_name}' not found in $config_file" >&2
+        return 1
+    fi
+    
+    # Create temp files for merging
+    local base_config=$(mktemp)
+    local variant_config=$(mktemp)
+    
+    # Extract base configuration (without variants)
+    yq eval 'del(.variants)' "$config_file" > "$base_config"
+    
+    # Extract variant configuration
+    yq eval ".variants[] | select(.name == \"${variant_name}\") | del(.name, .description)" "$config_file" > "$variant_config"
+    
+    # Merge variant over base (variant takes precedence)
+    # Using yq's multiply operator for deep merge
+    yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$base_config" "$variant_config"
+    
+    # Clean up temp files
+    rm -f "$base_config" "$variant_config"
+    
+    return 0
+}
+
 # Find test configuration for a task
 # Usage: find_test_config "compilation/gcc.yaml"
 find_test_config() {

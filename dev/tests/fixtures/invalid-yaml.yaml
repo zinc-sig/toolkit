@@ -1,0 +1,12 @@
+---
+name: Invalid YAML
+description: This has invalid YAML syntax
+mock_resources:
+  submission:
+    files:
+      test.py: |
+        print('test')
+    invalid_indent: bad
+  wrong indent here
+task_parameters:
+  - this should be a dict not array

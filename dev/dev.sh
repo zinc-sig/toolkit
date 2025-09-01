@@ -148,12 +148,26 @@ create_test_pipeline_from_config() {
     local config_file="$5"
     local variant="$6"
     
-    # Load and validate the configuration
-    if ! validate_config "$config_file"; then
+    # If variant is specified, merge it with base configuration
+    local config_to_use="$config_file"
+    if [[ -n "$variant" ]]; then
+        # Create a temporary merged configuration
+        local merged_config=$(mktemp --suffix=.yaml)
+        if ! merge_variant_with_base "$config_file" "$variant" > "$merged_config"; then
+            print_error "Failed to merge variant '$variant'"
+            rm -f "$merged_config"
+            return 1
+        fi
+        config_to_use="$merged_config"
+    fi
+    
+    # Load and validate the configuration (now potentially merged with variant)
+    if ! validate_config "$config_to_use"; then
+        [[ -n "$variant" ]] && rm -f "$config_to_use"
         return 1
     fi
     
-    load_test_config "$config_file"
+    load_test_config "$config_to_use"
     
     print_info "Using test configuration: $TEST_CONFIG_NAME"
     [[ -n "$TEST_CONFIG_DESCRIPTION" ]] && print_info "Description: $TEST_CONFIG_DESCRIPTION"
@@ -191,11 +205,11 @@ resources:
 EOF
     
     # Add directories if they exist
-    generate_mock_directories "$config_file" "submission" "$output_file"
+    generate_mock_directories "$config_to_use" "submission" "$output_file"
     
     # Add submission files
     echo "      create_files:" >> "$output_file"
-    generate_mock_submission "$config_file" "$output_file"
+    generate_mock_submission "$config_to_use" "$output_file"
     
     # Add assignment assets
     cat >> "$output_file" << EOF
@@ -205,9 +219,9 @@ EOF
     source:
 EOF
     
-    generate_mock_directories "$config_file" "assignment_assets" "$output_file"
+    generate_mock_directories "$config_to_use" "assignment_assets" "$output_file"
     echo "      create_files:" >> "$output_file"
-    generate_mock_assets "$config_file" "$output_file"
+    generate_mock_assets "$config_to_use" "$output_file"
     
     # Add job definition
     cat >> "$output_file" << EOF
@@ -223,7 +237,7 @@ jobs:
 EOF
     
     # Check if prepare step is needed
-    load_preparation_config "$config_file"
+    load_preparation_config "$config_to_use"
     
     if [[ "$TEST_HAS_PREPARE" == "true" ]]; then
         cat >> "$output_file" << EOF
@@ -242,7 +256,7 @@ EOF
 EOF
         
         # Add outputs if defined
-        generate_prepare_outputs "$config_file" "$output_file"
+        generate_prepare_outputs "$config_to_use" "$output_file"
         
         cat >> "$output_file" << EOF
           run:
@@ -267,25 +281,8 @@ EOF
         vars:
 EOF
     
-    # Add task parameters (potentially overridden by variant)
-    if [[ -n "$variant" ]]; then
-        # Create temporary merged config
-        local temp_config=$(mktemp)
-        local base_params=$(yq eval '.task_parameters' "$config_file")
-        local variant_params=$(get_variant_config "$config_file" "$variant" | yq eval '.task_parameters // {}' -)
-        
-        # Simple merge: base params + variant overrides
-        {
-            echo "task_parameters:"
-            echo "$base_params" | yq eval 'to_entries | .[] | "  " + .key + ": " + (.value | @json)' -
-            echo "$variant_params" | yq eval 'to_entries | .[] | "  " + .key + ": " + (.value | @json)' -
-        } > "$temp_config"
-        
-        generate_task_parameters "$temp_config" "$output_file"
-        rm -f "$temp_config"
-    else
-        generate_task_parameters "$config_file" "$output_file"
-    fi
+    # Add task parameters (now from potentially merged config)
+    generate_task_parameters "$config_to_use" "$output_file"
     
     # Add ghost configuration
     cat >> "$output_file" << EOF
@@ -306,7 +303,7 @@ EOF
 EOF
     
     # Generate verification inputs
-    generate_verify_inputs "$config_file" "$output_file"
+    generate_verify_inputs "$config_to_use" "$output_file"
     
     cat >> "$output_file" << EOF
           run:
@@ -329,6 +326,11 @@ EOF
                 echo "Contents of compilation-output:"
                 ls -la compilation-output/ 2>/dev/null || echo "No output directory"
 EOF
+    fi
+    
+    # Clean up temporary merged config if created
+    if [[ -n "$variant" ]] && [[ "$config_to_use" != "$config_file" ]]; then
+        rm -f "$config_to_use"
     fi
 }
 

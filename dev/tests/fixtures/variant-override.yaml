@@ -1,0 +1,51 @@
+---
+name: Variant Override Test
+description: Test that variants properly override base configuration
+
+mock_resources:
+  submission:
+    files:
+      test.py: |
+        print("test")
+  
+  assignment_assets:
+    files:
+      input.txt: "test input"
+
+task_parameters:
+  param1: "base_value"
+  param2: "unchanged"
+  score: "10"
+
+verification:
+  image:
+    repository: python
+    tag: "3.9"
+  script: |
+    echo "Base verification script"
+    exit 0
+
+variants:
+  - name: "override-params"
+    description: "Override task parameters"
+    task_parameters:
+      param1: "variant_value"
+      param3: "new_param"
+    
+  - name: "override-verification"
+    description: "Override verification script"
+    verification:
+      script: |
+        echo "Variant verification script"
+        exit 1
+    
+  - name: "override-both"
+    description: "Override both parameters and verification"
+    task_parameters:
+      param1: "both_variant_value"
+    verification:
+      image:
+        repository: alpine
+        tag: "latest"
+      script: |
+        echo "Both overridden"

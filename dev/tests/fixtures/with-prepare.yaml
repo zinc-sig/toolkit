@@ -1,0 +1,47 @@
+---
+name: Configuration with Prepare Step
+description: Test configuration with preparation stage
+
+mock_resources:
+  submission:
+    files:
+      source.java: |
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("Hello");
+            }
+        }
+  
+  assignment_assets:
+    files:
+      requirements.txt: |
+        junit==4.13
+
+preparation:
+  image:
+    repository: openjdk
+    tag: "11-jdk"
+  outputs:
+    - compilation-output
+    - test-resources
+  script: |
+    echo "Preparing environment..."
+    mkdir -p compilation-output
+    javac submission/source.java -d compilation-output/
+    echo "Preparation complete"
+
+task_parameters:
+  main_class: "Main"
+  classpath: "compilation-output"
+  score: "20"
+
+verification:
+  image:
+    repository: openjdk
+    tag: "11-jre"
+  inputs:
+    - compilation-output
+    - test-resources
+  script: |
+    echo "Verifying with prepared outputs..."
+    java -cp compilation-output Main
