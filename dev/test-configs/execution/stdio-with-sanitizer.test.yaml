@@ -205,14 +205,17 @@ variants:
         
         int main() {
             printf("Starting buffer overflow test\n");
+            fflush(stdout);
             
             // Allocate small buffer
             char *buffer = (char*)malloc(10);
             
-            // Intentional buffer overflow - writing past allocated memory
-            strcpy(buffer, "This string is way too long for the buffer!");
+            // Intentional buffer overflow - write beyond allocated memory
+            for (int i = 0; i < 20; i++) {
+                buffer[i] = 'A' + i;
+            }
             
-            printf("This line may not be reached due to ASAN\n");
+            printf("This line should not be reached due to ASAN\n");
             
             free(buffer);
             return 0;
@@ -229,22 +232,39 @@ variants:
     verification:
       script: |
         echo "Checking for buffer overflow detection..."
+        
+        # Check stderr for ASAN report
         if [ -f execution-output/stderr.txt ]; then
-          echo "Stderr output:"
+          echo "📄 Stderr output:"
           cat execution-output/stderr.txt
           
           # ASAN should detect and report the overflow
           if grep -q "heap-buffer-overflow" execution-output/stderr.txt; then
             echo "✅ ASAN successfully detected buffer overflow!"
+          elif grep -q "AddressSanitizer" execution-output/stderr.txt; then
+            echo "✅ ASAN detected an error!"
           elif [ -s execution-output/stderr.txt ]; then
-            echo "⚠️ Stderr has content but no overflow detected"
+            echo "⚠️ Stderr has content but no ASAN detection"
+          else
+            echo "❌ No ASAN error detected (stderr empty)"
           fi
         fi
         
+        # Check stdout (should be minimal due to crash)
         if [ -f execution-output/output.txt ]; then
-          echo "Output (may be incomplete due to crash):"
+          echo "📄 Output (should stop at overflow):"
           cat execution-output/output.txt
+          
+          # Program should NOT complete normally
+          if grep -q "should not be reached" execution-output/output.txt; then
+            echo "❌ Program continued after overflow - ASAN may not be working!"
+          else
+            echo "✅ Program stopped at overflow as expected"
+          fi
         fi
+        
+        echo ""
+        echo "Note: Ghost should capture non-zero exit code when ASAN detects errors"
 
   - name: "execution-with-gcc-image"
     description: "Execute ASAN binary in GCC container (has runtime libraries)"
