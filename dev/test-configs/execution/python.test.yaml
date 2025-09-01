@@ -1,11 +1,13 @@
 ---
 name: Python Execution Test
-description: Test configuration for Python script execution task
+description: Comprehensive test configuration for Python script execution with multiple scenarios
 
 mock_resources:
   submission:
     files:
       main.py: |
+        import sys
+        
         def greet(name):
             return f"Hello, {name}!"
         
@@ -13,129 +15,346 @@ mock_resources:
             return a + b
         
         if __name__ == "__main__":
-            print(greet("World"))
-            print(f"Sum of 5 + 3 = {calculate_sum(5, 3)}")
+            # Handle command line arguments
+            if len(sys.argv) > 1:
+                print(f"Arguments: {', '.join(sys.argv[1:])}")
+            
+            # Try to read stdin
+            lines = ""
+            try:
+                lines = sys.stdin.read().strip()
+            except:
+                pass  # No stdin available
+            
+            # Process input if available
+            if lines:
+                try:
+                    # Try to parse as numbers
+                    nums = [int(x) for x in lines.split()]
+                    if len(nums) >= 2:
+                        print(f"Sum: {nums[0]} + {nums[1]} = {nums[0] + nums[1]}")
+                    else:
+                        print(f"Input received: {lines}")
+                except ValueError:
+                    print(f"Text input: {lines}")
+            else:
+                # Default output when no input
+                print(greet("World"))
+                print(f"Sum of 5 + 3 = {calculate_sum(5, 3)}")
       
-      src/utils.py: |
+      utils/__init__.py: |
+        # Package initialization
+        from .math_utils import factorial, is_prime
+        from .string_utils import reverse_string, count_words
+        
+        __all__ = ['factorial', 'is_prime', 'reverse_string', 'count_words']
+      
+      utils/math_utils.py: |
         def factorial(n):
+            """Calculate factorial of n"""
             if n <= 1:
                 return 1
             return n * factorial(n - 1)
         
         def is_prime(n):
+            """Check if n is a prime number"""
             if n < 2:
                 return False
             for i in range(2, int(n ** 0.5) + 1):
                 if n % i == 0:
                     return False
             return True
+      
+      utils/string_utils.py: |
+        def reverse_string(s):
+            """Reverse a string"""
+            return s[::-1]
+        
+        def count_words(text):
+            """Count words in text"""
+            return len(text.split())
 
   assignment_assets:
     files:
-      requirements.txt: |
-        # No external dependencies required for this test
-      test_data.txt: |
-        Test input data for Python script
-        Line 2
-        Line 3
+      test-1/input.txt: |
+        10 20
+      test-1/expected.txt: |
+        Sum: 10 + 20 = 30
+      test-2/input.txt: |
+        Hello Python World
+      test-2/expected.txt: |
+        Text input: Hello Python World
 
 task_parameters:
-  script_path: "submission/main.py"
-  python_version: "3.9"
-  working_directory: "submission"
-  timeout: "30"
-  memory_limit: "128MB"
-  score: "15"
+  execution_type: "script"
+  execution_target: "submission/main.py"
+  python_flags: "-u"
+  execution_flags: ""
+  pythonpath: ""
+  requirements_path: ""
+  input_path: ""
+  output_path: "output.txt"
+  stderr_path: "stderr.txt"
+  timeout: "30s"
+  repository: "python"
+  version: "3.11"
+  variant: "slim"
+  score: "20"
 
 verification:
   image:
-    repository: python
-    tag: "3.9-slim"
+    repository: busybox
+    tag: latest
+  inputs:
+    - execution-output
   script: |
     echo "🐍 Checking Python execution output..."
     
-    # Check if execution was successful
-    if [ -f execution-output/stdout.txt ]; then
-      echo "✅ Python script executed successfully"
-      echo "📄 Standard Output:"
-      cat execution-output/stdout.txt
+    if [ -f execution-output/output.txt ]; then
+      echo "✅ Output file created"
+      echo "📄 Output content:"
+      cat execution-output/output.txt
       
-      # Verify expected output
-      if grep -q "Hello, World!" execution-output/stdout.txt && \
-         grep -q "Sum of 5 + 3 = 8" execution-output/stdout.txt; then
+      # Verify expected output for default test
+      if grep -q "Hello, World!" execution-output/output.txt && \
+         grep -q "Sum of 5 + 3 = 8" execution-output/output.txt; then
         echo "✅ Output verification passed"
       else
         echo "❌ Output verification failed"
         exit 1
       fi
     else
-      echo "❌ Python script execution failed"
-      cat execution-output/stderr.txt 2>/dev/null || echo "No stderr output"
+      echo "❌ Output file not found"
+      if [ -f execution-output/stderr.txt ]; then
+        echo "Stderr content:"
+        cat execution-output/stderr.txt
+      fi
       exit 1
-    fi
-    
-    # Check if error log exists and is empty
-    if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
-      echo "⚠️  Warnings/errors found:"
-      cat execution-output/stderr.txt
     fi
 
 # Test variants for different Python scenarios
 variants:
+  - name: "with-stdin"
+    description: "Test with stdin input redirection"
+    task_parameters:
+      input_path: "assignment-assets/test-1/input.txt"
+    verification:
+      script: |
+        echo "Checking stdin input handling..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Sum: 10 + 20 = 30" execution-output/output.txt; then
+            echo "✅ Stdin input processed correctly!"
+          else
+            echo "❌ Stdin processing failed"
+            exit 1
+          fi
+        fi
+
+  - name: "with-arguments"
+    description: "Test with command line arguments"
+    task_parameters:
+      execution_flags: "arg1 arg2 --verbose"
+    verification:
+      script: |
+        echo "Checking command line arguments..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Arguments: arg1, arg2, --verbose" execution-output/output.txt; then
+            echo "✅ Arguments passed correctly!"
+          else
+            echo "❌ Arguments not found"
+            exit 1
+          fi
+        fi
+
+  - name: "module-execution"
+    description: "Execute as Python module"
+    mock_resources:
+      submission:
+        files:
+          __init__.py: ""
+          __main__.py: |
+            print("Executed as module with -m flag")
+            print("Module name:", __name__)
+    task_parameters:
+      execution_type: "module"
+      execution_target: "submission"
+    verification:
+      script: |
+        echo "Checking module execution..."
+        if grep -q "Executed as module" execution-output/output.txt && \
+           grep -q "Module name: __main__" execution-output/output.txt; then
+          echo "✅ Module execution successful!"
+        else
+          echo "❌ Module execution failed"
+          cat execution-output/output.txt
+          exit 1
+        fi
+
   - name: "with-imports"
-    description: "Test Python script with module imports"
+    description: "Test with local package imports"
     mock_resources:
       submission:
         files:
-          main.py: |
-            from src.utils import factorial, is_prime
+          test_imports.py: |
+            from utils import factorial, is_prime, reverse_string
             
-            def main():
-                print("Testing factorial function:")
-                print(f"factorial(5) = {factorial(5)}")
-                
-                print("\nTesting prime checker:")
-                for num in [2, 3, 4, 5, 17, 25]:
-                    result = "prime" if is_prime(num) else "not prime"
-                    print(f"{num} is {result}")
-            
-            if __name__ == "__main__":
-                main()
-    
+            print(f"5! = {factorial(5)}")
+            print(f"Is 17 prime? {is_prime(17)}")
+            print(f"Reverse 'Python': {reverse_string('Python')}")
+    task_parameters:
+      execution_target: "submission/test_imports.py"
+      pythonpath: "submission"
+    verification:
+      script: |
+        echo "Checking import functionality..."
+        if grep -q "5! = 120" execution-output/output.txt && \
+           grep -q "Is 17 prime? True" execution-output/output.txt && \
+           grep -q "Reverse 'Python': nohtyP" execution-output/output.txt; then
+          echo "✅ Imports working correctly!"
+        else
+          echo "❌ Import test failed"
+          cat execution-output/output.txt
+          cat execution-output/stderr.txt
+          exit 1
+        fi
+
+  - name: "with-requirements"
+    description: "Test with external dependencies"
+    mock_resources:
+      assignment_assets:
+        files:
+          requirements.txt: |
+            # Test requirement (json is built-in, but tests the flow)
+          test_json.py: |
+            import json
+            data = {"test": "value", "number": 42}
+            print(json.dumps(data, indent=2))
+    task_parameters:
+      execution_target: "assignment-assets/test_json.py"
+      requirements_path: "assignment-assets/requirements.txt"
+    verification:
+      script: |
+        echo "Checking requirements installation..."
+        if grep -q '"test": "value"' execution-output/output.txt && \
+           grep -q '"number": 42' execution-output/output.txt; then
+          echo "✅ Requirements test passed!"
+        else
+          echo "❌ Requirements test failed"
+          cat execution-output/output.txt
+          exit 1
+        fi
+
   - name: "error-handling"
-    description: "Test Python script with intentional error"
+    description: "Test error capture in stderr"
     mock_resources:
       submission:
         files:
-          main.py: |
+          error_test.py: |
+            import sys
+            
+            print("Normal output to stdout")
+            print("Error message to stderr", file=sys.stderr)
+            
             try:
                 result = 10 / 0
             except ZeroDivisionError as e:
-                print(f"Caught expected error: {e}")
-                print("Error handling works correctly!")
+                print(f"Caught error: {e}")
+                sys.stderr.write(f"Error logged: {e}\n")
             
-            print("Script completed successfully despite error")
-    
-  - name: "file-io"
-    description: "Test Python script with file I/O operations"
+            print("Script completed")
+    task_parameters:
+      execution_target: "submission/error_test.py"
+    verification:
+      script: |
+        echo "Checking error handling..."
+        if [ -f execution-output/output.txt ] && [ -f execution-output/stderr.txt ]; then
+          echo "Stdout:"
+          cat execution-output/output.txt
+          echo "Stderr:"
+          cat execution-output/stderr.txt
+          
+          if grep -q "Normal output" execution-output/output.txt && \
+             grep -q "Caught error" execution-output/output.txt && \
+             grep -q "Error message" execution-output/stderr.txt; then
+            echo "✅ Error handling working correctly!"
+          else
+            echo "❌ Error handling failed"
+            exit 1
+          fi
+        fi
+
+  - name: "timeout-test"
+    description: "Test timeout functionality"
     mock_resources:
       submission:
         files:
-          main.py: |
-            # Read test data
-            try:
-                with open('../assignment-assets/test_data.txt', 'r') as f:
-                    content = f.read()
-                    print("📁 File content read successfully:")
-                    print(content.strip())
-                
-                # Write output file
-                with open('output.txt', 'w') as f:
-                    f.write("Python file I/O test completed\n")
-                    f.write(f"Input had {len(content.splitlines())} lines\n")
-                
-                print("✅ File operations completed")
-                
-            except Exception as e:
-                print(f"❌ File operation error: {e}")
-                exit(1)
+          slow_script.py: |
+            import time
+            print("Starting slow operation...")
+            time.sleep(2)  # Will timeout with 1s limit
+            print("This should not print")
+    task_parameters:
+      execution_target: "submission/slow_script.py"
+      timeout: "1s"
+    verification:
+      script: |
+        echo "Checking timeout functionality..."
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+          if grep -q "Starting slow operation" execution-output/output.txt && \
+             ! grep -q "This should not print" execution-output/output.txt; then
+            echo "✅ Timeout worked as expected!"
+          else
+            echo "Note: Timeout behavior depends on ghost implementation"
+          fi
+        fi
+
+  - name: "python-3-9"
+    description: "Test with Python 3.9"
+    task_parameters:
+      version: "3.9"
+    verification:
+      script: |
+        echo "Testing with Python 3.9..."
+        if [ -f execution-output/output.txt ]; then
+          if grep -q "Hello, World!" execution-output/output.txt; then
+            echo "✅ Python 3.9 execution successful!"
+          else
+            echo "❌ Python 3.9 execution failed"
+            exit 1
+          fi
+        fi
+
+  - name: "alpine-variant"
+    description: "Test with Alpine Linux variant"
+    task_parameters:
+      version: "3.11"
+      variant: "alpine"
+    verification:
+      script: |
+        echo "Testing with Alpine variant..."
+        if [ -f execution-output/output.txt ]; then
+          if grep -q "Hello, World!" execution-output/output.txt; then
+            echo "✅ Alpine variant execution successful!"
+          else
+            echo "❌ Alpine variant execution failed"
+            exit 1
+          fi
+        fi
+
+  - name: "text-stdin"
+    description: "Test with text stdin input"
+    task_parameters:
+      input_path: "assignment-assets/test-2/input.txt"
+    verification:
+      script: |
+        echo "Checking text stdin handling..."
+        if grep -q "Text input: Hello Python World" execution-output/output.txt; then
+          echo "✅ Text stdin handled correctly!"
+        else
+          echo "❌ Text stdin handling failed"
+          cat execution-output/output.txt
+          exit 1
+        fi

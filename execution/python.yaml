@@ -4,8 +4,8 @@ platform: linux
 image_resource:
   type: registry-image
   source:
-    repository: python
-    tag: "3.9-slim"
+    repository: ((repository))
+    tag: ((version))-((variant))
 
 inputs:
   - name: ghost
@@ -16,11 +16,16 @@ outputs:
   - name: execution-output
 
 params:
-  SCRIPT_PATH: ((script_path))
-  PYTHON_VERSION: ((python_version))
-  WORKING_DIRECTORY: ((working_directory))
+  EXECUTION_TYPE: ((execution_type))
+  EXECUTION_TARGET: ((execution_target))
+  PYTHON_FLAGS: ((python_flags))
+  EXECUTION_FLAGS: ((execution_flags))
+  PYTHONPATH: ((pythonpath))
+  REQUIREMENTS_PATH: ((requirements_path))
+  INPUT_PATH: ((input_path))
+  OUTPUT_PATH: ((output_path))
+  STDERR_PATH: ((stderr_path))
   TIMEOUT: ((timeout))
-  MEMORY_LIMIT: ((memory_limit))
   SCORE: ((score))
 
 run:
@@ -28,25 +33,83 @@ run:
   args:
     - -c
     - |
+      set -e
+      
       # Make ghost executable
       chmod +x ghost/ghost-linux-amd64
-
-      # Set working directory
-      cd "${WORKING_DIRECTORY}"
-
-      # Install any requirements if they exist
-      if [ -f "../assignment-assets/requirements.txt" ]; then
-        echo "📦 Installing Python requirements..."
-        pip install -r "../assignment-assets/requirements.txt"
+      
+      # Set up Python path if specified
+      if [ -n "${PYTHONPATH}" ]; then
+        export PYTHONPATH="${PYTHONPATH}:${PYTHONPATH}"
+      else
+        # Default: include submission directory for imports
+        export PYTHONPATH="submission:${PYTHONPATH}"
       fi
-
-      # Execute Python script with ghost
-      echo "🐍 Executing Python script: ${SCRIPT_PATH}"
-      ../ghost/ghost-linux-amd64 run --verbose \
-        -o ../execution-output/stdout.txt \
-        -e ../execution-output/stderr.txt \
-        --score "${SCORE}" \
-        --upload-provider "minio" \
-        --upload-files "stdout.txt:execution-output/stdout.txt,stderr.txt:execution-output/stderr.txt" \
-        --timeout "${TIMEOUT}" \
-        -- python3 "${SCRIPT_PATH##*/}"
+      
+      # Install requirements if specified
+      if [ -n "${REQUIREMENTS_PATH}" ] && [ -f "${REQUIREMENTS_PATH}" ]; then
+        echo "📦 Installing Python requirements from ${REQUIREMENTS_PATH}..."
+        pip install --quiet -r "${REQUIREMENTS_PATH}"
+      fi
+      
+      # Check for requirements.txt in common locations
+      if [ -f "submission/requirements.txt" ]; then
+        echo "📦 Installing submission requirements..."
+        pip install --quiet -r "submission/requirements.txt"
+      fi
+      
+      if [ -f "assignment-assets/requirements.txt" ]; then
+        echo "📦 Installing assignment requirements..."
+        pip install --quiet -r "assignment-assets/requirements.txt"
+      fi
+      
+      # Prepare Python execution command based on type
+      case "${EXECUTION_TYPE}" in
+        module)
+          # Execute as module: python -m module.name
+          PYTHON_CMD="python3 ${PYTHON_FLAGS} -m ${EXECUTION_TARGET}"
+          ;;
+        package)
+          # Execute as package: python -m package_name
+          PYTHON_CMD="python3 ${PYTHON_FLAGS} -m ${EXECUTION_TARGET}"
+          ;;
+        script|*)
+          # Default: execute as script
+          PYTHON_CMD="python3 ${PYTHON_FLAGS} ${EXECUTION_TARGET}"
+          ;;
+      esac
+      
+      # Add execution flags if provided
+      if [ -n "${EXECUTION_FLAGS}" ]; then
+        PYTHON_CMD="${PYTHON_CMD} ${EXECUTION_FLAGS}"
+      fi
+      
+      echo "🐍 Executing Python: ${PYTHON_CMD}"
+      echo "📂 PYTHONPATH: ${PYTHONPATH}"
+      
+      # Build ghost command with input redirection (required by ghost)
+      GHOST_CMD="./ghost/ghost-linux-amd64 run --verbose"
+      
+      # Set input file - use specified file or /dev/null if none
+      if [ -n "${INPUT_PATH}" ] && [ -f "${INPUT_PATH}" ]; then
+        GHOST_CMD="${GHOST_CMD} -i \"${INPUT_PATH}\""
+      else
+        GHOST_CMD="${GHOST_CMD} -i /dev/null"
+      fi
+      
+      # Add output and error paths
+      GHOST_CMD="${GHOST_CMD} -o \"execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}\""
+      GHOST_CMD="${GHOST_CMD} -e \"execution-output/${STDERR_PATH}:${STDERR_PATH}\""
+      
+      # Add score and timeout
+      GHOST_CMD="${GHOST_CMD} --score \"${SCORE}\""
+      GHOST_CMD="${GHOST_CMD} --timeout \"${TIMEOUT}\""
+      
+      # Add upload provider
+      GHOST_CMD="${GHOST_CMD} --upload-provider \"minio\""
+      
+      # Add the Python command
+      GHOST_CMD="${GHOST_CMD} -- ${PYTHON_CMD}"
+      
+      # Execute the command
+      eval ${GHOST_CMD}

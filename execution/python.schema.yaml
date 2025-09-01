@@ -1,0 +1,75 @@
+---
+name: Python Script Execution
+description: Executes Python scripts with support for modules, packages, and dependencies
+parameters:
+  - name: execution_type
+    type: string
+    description: How to execute the Python code (script, module, or package)
+    default: script
+    enum: [script, module, package]
+    example: module
+  - name: execution_target
+    type: string
+    description: Path to .py file (for script) or module name (for module/package)
+    default: submission/main.py
+    example: submission.main
+  - name: python_flags
+    type: string
+    description: Python interpreter flags (-u for unbuffered, -O for optimization)
+    default: "-u"
+    example: "-u -W ignore"
+  - name: execution_flags
+    type: string
+    description: Command line arguments passed to the Python script
+    default: "{{ .args }}"
+    example: "--verbose --config=prod"
+  - name: pythonpath
+    type: string
+    description: Additional paths to add to PYTHONPATH (colon-separated)
+    default: ""
+    example: "submission:submission/lib"
+  - name: requirements_path
+    type: string
+    description: Path to requirements.txt file for pip installation
+    default: ""
+    example: assignment-assets/requirements.txt
+  - name: input_path
+    type: string
+    description: Path to input file for stdin redirection
+    default: ""
+    example: assignment-assets/{{ .code }}/input.txt
+  - name: output_path
+    type: string
+    description: Path to save stdout relative to the output directory
+    default: output.txt
+    example: output.txt
+  - name: stderr_path
+    type: string
+    description: Path to save stderr relative to the output directory
+    default: stderr.txt
+    example: stderr.txt
+  - name: timeout
+    type: string
+    description: Execution timeout in Go duration format (e.g., 30s, 2m, 1h)
+    default: "30s"
+    example: "{{ .timeout }}"
+  - name: repository
+    type: string
+    description: Python Docker image repository
+    default: python
+    example: python
+  - name: version
+    type: string
+    description: Python version tag
+    default: "3.11"
+    example: "{{ .python_version }}"
+  - name: variant
+    type: string
+    description: Python image variant (slim, alpine, full)
+    default: slim
+    example: alpine
+  - name: score
+    type: string
+    description: Score to assign if execution succeeds (exit code 0)
+    default: "0"
+    example: "{{ .score }}"
