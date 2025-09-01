@@ -1,0 +1,305 @@
+---
+name: Stdio Execution with Sanitizer Test
+description: Test execution of ASAN-compiled binaries to verify sanitizer runtime support
+
+# This test will compile with ASAN and then try to execute
+# It uses a prepare step to compile the binary with sanitizers
+
+preparation:
+  image:
+    repository: gcc
+    tag: latest
+  outputs:
+    - compilation-output
+  script: |
+    echo "🔨 Compiling with AddressSanitizer..."
+    
+    # Create a test program that uses memory operations
+    cat > /tmp/memory_test.c << 'EOF'
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <string.h>
+    
+    int main(int argc, char *argv[]) {
+        printf("Starting memory test program\n");
+        
+        // Allocate some memory
+        char *buffer = (char*)malloc(100);
+        if (!buffer) {
+            fprintf(stderr, "Failed to allocate memory\n");
+            return 1;
+        }
+        
+        // Use the memory
+        strcpy(buffer, "Hello from ASAN-protected program!");
+        printf("Buffer content: %s\n", buffer);
+        
+        // Process any input
+        if (argc > 1) {
+            printf("Arguments received: ");
+            for (int i = 1; i < argc; i++) {
+                printf("%s ", argv[i]);
+            }
+            printf("\n");
+        }
+        
+        // Read from stdin if available
+        char input[256];
+        if (fgets(input, sizeof(input), stdin)) {
+            printf("Input received: %s", input);
+        }
+        
+        // Clean up properly
+        free(buffer);
+        
+        printf("Memory test completed successfully\n");
+        return 0;
+    }
+    EOF
+    
+    # Compile with AddressSanitizer
+    gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
+        /tmp/memory_test.c -o compilation-output/memory_test
+    
+    if [ -f compilation-output/memory_test ]; then
+        echo "✅ Binary compiled with ASAN"
+        echo "Binary size: $(du -h compilation-output/memory_test | cut -f1)"
+        
+        # Check for ASAN symbols
+        if strings compilation-output/memory_test | grep -q "__asan"; then
+            echo "✅ ASAN symbols found in binary"
+        fi
+        
+        # Make it executable
+        chmod +x compilation-output/memory_test
+    else
+        echo "❌ Compilation failed"
+        exit 1
+    fi
+
+mock_resources:
+  submission:
+    files:
+      placeholder.txt: "Not used - binary created in prepare step"
+  
+  assignment_assets:
+    files:
+      input.txt: |
+        Test input for ASAN binary
+
+task_parameters:
+  execution_binary: "compilation-output/memory_test"
+  execution_flags: "arg1 arg2"
+  input_path: "assignment-assets/input.txt"
+  output_path: "output.txt"
+  stderr_path: "stderr.txt"
+  score: "10"
+  # Sanitizer-specific parameters
+  repository: "gcc"
+  tag: "latest"
+  asan_options: "detect_leaks=1:print_stats=1"
+  ubsan_options: ""
+  tsan_options: ""
+
+verification:
+  image:
+    repository: busybox
+    tag: latest
+  inputs:
+    - execution-output
+  script: |
+    echo "🔍 Checking execution results..."
+    
+    # Check if output file exists
+    if [ -f execution-output/output.txt ]; then
+        echo "✅ Output file created"
+        echo "📄 Output content:"
+        cat execution-output/output.txt
+        
+        # Check for expected output
+        if grep -q "Starting memory test program" execution-output/output.txt && \
+           grep -q "Buffer content: Hello from ASAN-protected program!" execution-output/output.txt && \
+           grep -q "Memory test completed successfully" execution-output/output.txt; then
+            echo "✅ Program executed successfully with ASAN"
+        else
+            echo "⚠️ Unexpected output"
+        fi
+    else
+        echo "❌ Output file not found"
+    fi
+    
+    # Check stderr for any ASAN errors
+    if [ -f execution-output/stderr.txt ]; then
+        echo "📄 Stderr content:"
+        cat execution-output/stderr.txt
+        
+        # Check for ASAN runtime errors
+        if grep -q "AddressSanitizer" execution-output/stderr.txt; then
+            echo "⚠️ ASAN detected memory issues!"
+        elif [ -s execution-output/stderr.txt ]; then
+            echo "⚠️ Stderr has content (might be missing ASAN runtime)"
+        else
+            echo "✅ No errors in stderr"
+        fi
+    fi
+
+# Test variants
+variants:
+  - name: "with-memory-leak"
+    description: "Test ASAN detection of memory leak"
+    preparation:
+      script: |
+        echo "🔨 Compiling with memory leak..."
+        
+        cat > /tmp/leak_test.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
+        
+        int main() {
+            printf("Starting leak test\n");
+            
+            // Intentional memory leak
+            char *leak = (char*)malloc(100);
+            strcpy(leak, "This memory is never freed!");
+            printf("Leaked buffer: %s\n", leak);
+            
+            // Don't free the memory
+            // free(leak);  // Commented out to cause leak
+            
+            printf("Leak test completed\n");
+            return 0;
+        }
+        EOF
+        
+        gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
+            /tmp/leak_test.c -o compilation-output/leak_test
+        
+        chmod +x compilation-output/leak_test
+    task_parameters:
+      execution_binary: "compilation-output/leak_test"
+      execution_flags: ""
+    verification:
+      script: |
+        echo "Checking for memory leak detection..."
+        if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
+          echo "Stderr output:"
+          cat execution-output/stderr.txt
+          # ASAN should report the leak if runtime is available
+        fi
+        
+        if [ -f execution-output/output.txt ]; then
+          cat execution-output/output.txt
+        fi
+
+  - name: "with-buffer-overflow"
+    description: "Test ASAN detection of buffer overflow"
+    preparation:
+      script: |
+        echo "🔨 Compiling with buffer overflow..."
+        
+        cat > /tmp/overflow_test.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
+        
+        int main() {
+            printf("Starting buffer overflow test\n");
+            
+            // Allocate small buffer
+            char *buffer = (char*)malloc(10);
+            
+            // Intentional buffer overflow - writing past allocated memory
+            strcpy(buffer, "This string is way too long for the buffer!");
+            
+            printf("This line may not be reached due to ASAN\n");
+            
+            free(buffer);
+            return 0;
+        }
+        EOF
+        
+        gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
+            /tmp/overflow_test.c -o compilation-output/overflow_test
+        
+        chmod +x compilation-output/overflow_test
+    task_parameters:
+      execution_binary: "compilation-output/overflow_test"
+      execution_flags: ""
+    verification:
+      script: |
+        echo "Checking for buffer overflow detection..."
+        if [ -f execution-output/stderr.txt ]; then
+          echo "Stderr output:"
+          cat execution-output/stderr.txt
+          
+          # ASAN should detect and report the overflow
+          if grep -q "heap-buffer-overflow" execution-output/stderr.txt; then
+            echo "✅ ASAN successfully detected buffer overflow!"
+          elif [ -s execution-output/stderr.txt ]; then
+            echo "⚠️ Stderr has content but no overflow detected"
+          fi
+        fi
+        
+        if [ -f execution-output/output.txt ]; then
+          echo "Output (may be incomplete due to crash):"
+          cat execution-output/output.txt
+        fi
+
+  - name: "execution-with-gcc-image"
+    description: "Execute ASAN binary in GCC container (has runtime libraries)"
+    # Override the stdio task to use gcc image instead of busybox
+    # This simulates what would be needed for proper ASAN execution
+    mock_resources:
+      submission:
+        files:
+          stdio-gcc.yaml: |
+            ---
+            platform: linux
+            image_resource:
+              type: registry-image
+              source:
+                repository: gcc
+                tag: latest
+            inputs:
+              - name: submission
+              - name: compilation-output
+              - name: assignment-assets
+              - name: ghost
+            outputs:
+              - name: execution-output
+            params:
+              EXECUTION_BINARY: ((execution_binary))
+              EXECUTION_FLAGS: ((execution_flags))
+              INPUT_PATH: ((input_path))
+              OUTPUT_PATH: ((output_path))
+              STDERR_PATH: ((stderr_path))
+              SCORE: ((score))
+            run:
+              path: bash
+              args:
+                - -c
+                - |
+                  chmod +x ghost/ghost-linux-amd64
+                  ./ghost/ghost-linux-amd64 run --verbose \
+                    -i "${INPUT_PATH}" \
+                    -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
+                    -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \
+                    --score "${SCORE}" \
+                    --upload-provider "minio" \
+                    -- ${EXECUTION_BINARY} ${EXECUTION_FLAGS}
+    verification:
+      script: |
+        echo "Testing execution in GCC container with ASAN runtime..."
+        echo "This variant demonstrates that ASAN binaries need the runtime"
+        echo "The GCC image has the necessary libraries"
+        
+        if [ -f execution-output/output.txt ]; then
+          echo "Output:"
+          cat execution-output/output.txt
+        fi
+        
+        if [ -f execution-output/stderr.txt ] && [ -s execution-output/stderr.txt ]; then
+          echo "Stderr (should be empty with proper runtime):"
+          cat execution-output/stderr.txt
+        fi

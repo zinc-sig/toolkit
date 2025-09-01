@@ -77,3 +77,114 @@ variants:
     task_parameters:
       version: "11"
       compiler_flags: "-Wall -Wextra -std=c11"
+  
+  - name: "with-address-sanitizer"
+    description: "Test compilation with AddressSanitizer enabled"
+    mock_resources:
+      submission:
+        files:
+          memory_test.c: |
+            #include <stdio.h>
+            #include <stdlib.h>
+            #include <string.h>
+            
+            int main() {
+                // Allocate memory for testing
+                char *buffer = (char*)malloc(10 * sizeof(char));
+                if (buffer == NULL) {
+                    printf("Memory allocation failed\n");
+                    return 1;
+                }
+                
+                // Safe operations
+                strcpy(buffer, "Hello");
+                printf("Buffer: %s\n", buffer);
+                
+                // Clean up properly
+                free(buffer);
+                
+                printf("Memory test completed successfully\n");
+                return 0;
+            }
+    task_parameters:
+      source_file: "submission/memory_test.c"
+      output_binary: "memory_test"
+      compiler_flags: "-g -fsanitize=address -fno-omit-frame-pointer -O1"
+      language: "c"
+      score: "15"
+    verification:
+      script: |
+        echo "Checking AddressSanitizer compilation..."
+        if [ -f compilation-output/memory_test ]; then
+          echo "✅ Binary with ASAN created successfully"
+          # Check if the binary has ASAN symbols
+          if strings compilation-output/memory_test | grep -q "__asan"; then
+            echo "✅ AddressSanitizer symbols found in binary"
+          else
+            echo "⚠️ AddressSanitizer symbols not found (might be statically linked)"
+          fi
+          echo "Binary size: $(du -h compilation-output/memory_test | cut -f1)"
+        else
+          echo "❌ Binary not found"
+          exit 1
+        fi
+  
+  - name: "with-undefined-sanitizer"
+    description: "Test compilation with UndefinedBehaviorSanitizer"
+    mock_resources:
+      submission:
+        files:
+          undefined_test.c: |
+            #include <stdio.h>
+            #include <limits.h>
+            
+            int safe_add(int a, int b) {
+                // Check for overflow before addition
+                if (a > 0 && b > INT_MAX - a) {
+                    printf("Would overflow, returning INT_MAX\n");
+                    return INT_MAX;
+                }
+                if (a < 0 && b < INT_MIN - a) {
+                    printf("Would underflow, returning INT_MIN\n");
+                    return INT_MIN;
+                }
+                return a + b;
+            }
+            
+            int main() {
+                printf("Testing integer operations...\n");
+                
+                // Safe operations
+                int result = safe_add(100, 200);
+                printf("100 + 200 = %d\n", result);
+                
+                // Test near limits
+                result = safe_add(INT_MAX - 1, 1);
+                printf("INT_MAX - 1 + 1 = %d\n", result);
+                
+                printf("UB sanitizer test completed\n");
+                return 0;
+            }
+    task_parameters:
+      source_file: "submission/undefined_test.c"
+      output_binary: "undefined_test"
+      compiler_flags: "-g -fsanitize=undefined -fno-omit-frame-pointer -O1"
+      language: "c"
+      score: "15"
+    verification:
+      script: |
+        echo "Checking UBSan compilation..."
+        if [ -f compilation-output/undefined_test ]; then
+          echo "✅ Binary with UBSan created successfully"
+          # Check for UBSan runtime symbols
+          if strings compilation-output/undefined_test | grep -q "__ubsan"; then
+            echo "✅ UBSan symbols found in binary"
+          else
+            echo "⚠️ UBSan symbols not found (might be statically linked)"
+          fi
+          echo "Binary size: $(du -h compilation-output/undefined_test | cut -f1)"
+        else
+          echo "❌ Binary not found"
+          exit 1
+        fi
+  

@@ -1,0 +1,59 @@
+---
+name: Stdio Execution with Sanitizer Support
+description: Executes compiled binaries with support for AddressSanitizer, UBSan, and ThreadSanitizer
+parameters:
+  - name: execution_binary
+    type: string
+    description: Path to the binary to execute (relative to workspace)
+    default: compilation-output/main
+    example: compilation-output/program
+  - name: execution_flags
+    type: string
+    description: Command line arguments to pass to the binary
+    default: ""
+    example: "-v --input=data.txt"
+  - name: input_path
+    type: string
+    description: Path to input file for stdin redirection
+    default: assignment-assets/input.txt
+    example: assignment-assets/{{ .code }}/input.txt
+  - name: output_path
+    type: string
+    description: Path to save stdout relative to the output directory
+    default: output.txt
+    example: output.txt
+  - name: stderr_path
+    type: string
+    description: Path to save stderr relative to the output directory
+    default: stderr.txt
+    example: stderr.txt
+  - name: repository
+    type: string
+    description: Docker image repository (should have sanitizer runtime)
+    default: gcc
+    example: gcc
+  - name: tag
+    type: string
+    description: Docker image tag
+    default: latest
+    example: "13"
+  - name: asan_options
+    type: string
+    description: AddressSanitizer runtime options
+    default: ""
+    example: "detect_leaks=1:halt_on_error=0:print_stats=1"
+  - name: ubsan_options
+    type: string
+    description: UndefinedBehaviorSanitizer runtime options
+    default: ""
+    example: "print_stacktrace=1:halt_on_error=0"
+  - name: tsan_options
+    type: string
+    description: ThreadSanitizer runtime options
+    default: ""
+    example: "halt_on_error=0:history_size=7"
+  - name: score
+    type: string
+    description: Score to assign if execution succeeds (exit code 0)
+    default: "0"
+    example: "{{ .score }}"
