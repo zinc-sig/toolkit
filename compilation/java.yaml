@@ -6,6 +6,8 @@ image_resource:
     tag: ((version))-((variant))
 inputs:
   - name: submission
+  - name: upstream-output
+    optional: true
   - name: assignment-assets
   - name: ghost
 outputs:

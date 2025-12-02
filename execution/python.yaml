@@ -10,6 +10,8 @@ image_resource:
 inputs:
   - name: ghost
   - name: submission
+  - name: upstream-output
+    optional: true
   - name: assignment-assets
 
 outputs:

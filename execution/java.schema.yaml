@@ -10,7 +10,7 @@ parameters:
   - name: execution_target
     type: string
     description: JAR file path or main class name to execute
-    default: compilation-output/app.jar
+    default: upstream-output/app.jar
     example: Main
   - name: classpath
     type: string

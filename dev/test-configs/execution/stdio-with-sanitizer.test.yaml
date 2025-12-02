@@ -10,7 +10,7 @@ preparation:
     repository: gcc
     tag: latest
   outputs:
-    - compilation-output
+    - upstream-output
   script: |
     echo "🔨 Compiling with AddressSanitizer..."
     
@@ -59,19 +59,19 @@ preparation:
     
     # Compile with AddressSanitizer
     gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
-        /tmp/memory_test.c -o compilation-output/memory_test
-    
-    if [ -f compilation-output/memory_test ]; then
+        /tmp/memory_test.c -o upstream-output/memory_test
+
+    if [ -f upstream-output/memory_test ]; then
         echo "✅ Binary compiled with ASAN"
-        echo "Binary size: $(du -h compilation-output/memory_test | cut -f1)"
-        
+        echo "Binary size: $(du -h upstream-output/memory_test | cut -f1)"
+
         # Check for ASAN symbols
-        if strings compilation-output/memory_test | grep -q "__asan"; then
+        if strings upstream-output/memory_test | grep -q "__asan"; then
             echo "✅ ASAN symbols found in binary"
         fi
-        
+
         # Make it executable
-        chmod +x compilation-output/memory_test
+        chmod +x upstream-output/memory_test
     else
         echo "❌ Compilation failed"
         exit 1
@@ -88,7 +88,7 @@ mock_resources:
         Test input for ASAN binary
 
 task_parameters:
-  execution_binary: "compilation-output/memory_test"
+  execution_binary: "upstream-output/memory_test"
   execution_flags: "arg1 arg2"
   input_path: "assignment-assets/input.txt"
   output_path: "output.txt"
@@ -173,11 +173,11 @@ variants:
         EOF
         
         gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
-            /tmp/leak_test.c -o compilation-output/leak_test
-        
-        chmod +x compilation-output/leak_test
+            /tmp/leak_test.c -o upstream-output/leak_test
+
+        chmod +x upstream-output/leak_test
     task_parameters:
-      execution_binary: "compilation-output/leak_test"
+      execution_binary: "upstream-output/leak_test"
       execution_flags: ""
     verification:
       script: |
@@ -223,11 +223,11 @@ variants:
         EOF
         
         gcc -g -fsanitize=address -fno-omit-frame-pointer -O1 \
-            /tmp/overflow_test.c -o compilation-output/overflow_test
-        
-        chmod +x compilation-output/overflow_test
+            /tmp/overflow_test.c -o upstream-output/overflow_test
+
+        chmod +x upstream-output/overflow_test
     task_parameters:
-      execution_binary: "compilation-output/overflow_test"
+      execution_binary: "upstream-output/overflow_test"
       execution_flags: ""
     verification:
       script: |
@@ -283,7 +283,8 @@ variants:
                 tag: latest
             inputs:
               - name: submission
-              - name: compilation-output
+              - name: upstream-output
+                optional: true
               - name: assignment-assets
               - name: ghost
             outputs:
