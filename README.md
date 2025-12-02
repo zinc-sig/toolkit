@@ -82,7 +82,7 @@ stage "execution" {
       }
     }
     options = {
-      execution_binary = "compilation-output/main"
+      execution_binary = "upstream-output/main"
       execution_flags  = "{{ .args }}"
       input_path       = "assignment-assets/{{ .code }}/input.txt"
       output_path      = "output.txt"
@@ -130,7 +130,7 @@ stage "testing" {
     }
     
     options = {
-      input_path = "execution-output/output.txt"
+      input_path = "upstream-output/output.txt"
       expected_path = "assignment-assets/{{ .code }}/expected.txt"
       score = "{{ .score }}"     # Uses the scenario's score parameter
       timeout = "{{ .timeout }}"  # Uses the scenario's timeout parameter
@@ -167,7 +167,7 @@ The templating process:
 ## Path Resolution
 
 **Important**: All paths in task parameters are relative to their respective resources:
-- Input paths are relative to the input resource root (e.g., `submission/`, `assignment-assets/`, `compilation-output/`)
+- Input paths are relative to the input resource root (e.g., `submission/`, `assignment-assets/`, `upstream-output/`)
 - Output paths are now simple filenames or relative paths (e.g., `main`, `output.txt`, `stderr.txt`)
 - Ghost automatically creates parent directories for output files
 - Output files are uploaded directly to the configured storage location via ghost
@@ -204,9 +204,10 @@ run:
 2. **assignment-assets**: Test cases, inputs, expected outputs (from MinIO)
 3. **toolkit**: This repository (cloned via Git)
 4. **ghost**: Command runner (downloaded from GitHub releases)
-5. **compilation-output**: Results from compilation stage
-6. **execution-output**: Results from execution stage (per scenario)
-7. **testing-output**: Results from testing stage (per scenario)
+5. **upstream-output**: Generic input from previous pipeline stage (optional)
+6. **compilation-output**: Results from compilation stage (task output)
+7. **execution-output**: Results from execution stage per scenario (task output)
+8. **testing-output**: Results from testing stage per scenario (task output)
 
 ## Input/Output Resources by Task Type
 
@@ -228,7 +229,7 @@ output_binary: main  # Output binary relative to output directory
 ### Execution Tasks
 **Inputs:**
 - `submission`: Original source code (if needed)
-- `compilation-output`: Compiled binaries from compilation stage
+- `upstream-output`: Output from previous stage (optional, typically compiled binaries)
 - `assignment-assets`: Test input files
 - `ghost`: Command runner binary
 
@@ -237,7 +238,7 @@ output_binary: main  # Output binary relative to output directory
 
 **Common Path Examples:**
 ```yaml
-execution_binary: compilation-output/main           # Reads from compilation-output/main
+execution_binary: upstream-output/main              # Reads from upstream-output/main
 input_path: assignment-assets/{{ .code }}/input.txt # Input file for test case
 output_path: output.txt                             # Stdout saved relative to output directory
 stderr_path: stderr.txt                             # Stderr saved relative to output directory
@@ -247,7 +248,7 @@ stderr_path: stderr.txt                             # Stderr saved relative to o
 
 ### Testing Tasks
 **Inputs:**
-- `execution-output`: Actual program outputs from execution stage
+- `upstream-output`: Output from previous stage (optional, typically execution outputs)
 - `assignment-assets`: Expected output files
 - `ghost`: Command runner binary
 
@@ -256,7 +257,7 @@ stderr_path: stderr.txt                             # Stderr saved relative to o
 
 **Common Path Examples:**
 ```yaml
-input_path: execution-output/output.txt                  # Actual output from scenario's execution
+input_path: upstream-output/output.txt                   # Actual output from previous stage
 expected_path: assignment-assets/{{ .code }}/expected.txt # Expected output
 output_path: diff.txt                                    # Diff results saved relative to output directory
 ```

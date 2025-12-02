@@ -5,8 +5,8 @@ parameters:
   - name: input_path
     type: string
     description: Path to actual output file
-    default: execution-output/output.txt
-    example: execution-output/output.txt
+    default: upstream-output/output.txt
+    example: upstream-output/output.txt
   - name: expected_path
     type: string
     description: Path to expected output file

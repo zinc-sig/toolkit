@@ -5,8 +5,8 @@ parameters:
   - name: execution_binary
     type: string
     description: Path to the binary to execute (relative to workspace)
-    default: compilation-output/main
-    example: compilation-output/program
+    default: upstream-output/main
+    example: upstream-output/program
   - name: execution_flags
     type: string
     description: Command line arguments to pass to the binary

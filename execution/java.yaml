@@ -7,7 +7,8 @@ image_resource:
     tag: ((version))-((variant))
 inputs:
   - name: submission
-  - name: compilation-output
+  - name: upstream-output
+    optional: true
   - name: assignment-assets
   - name: ghost
 outputs:
@@ -39,9 +40,9 @@ run:
         JAVA_CMD="java ${JAVA_FLAGS} -jar ${EXECUTION_TARGET}"
       else
         # For class execution, build classpath
-        FULL_CLASSPATH="compilation-output"
+        FULL_CLASSPATH="upstream-output"
         if [ -n "${CLASSPATH}" ]; then
-          FULL_CLASSPATH="${CLASSPATH}:compilation-output"
+          FULL_CLASSPATH="${CLASSPATH}:upstream-output"
         fi
         JAVA_CMD="java ${JAVA_FLAGS} -cp ${FULL_CLASSPATH} ${EXECUTION_TARGET}"
       fi

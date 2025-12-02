@@ -74,30 +74,30 @@ preparation:
     repository: openjdk
     tag: 17-jdk
   outputs:
-    - compilation-output
+    - upstream-output
   script: |
     echo "=== Prepare Step: Compiling Java code ==="
-    
+
     # Create compilation output directory
-    mkdir -p compilation-output
-    
+    mkdir -p upstream-output
+
     # Compile Java source files
     echo "Compiling Java files..."
-    javac submission/*.java -d compilation-output/
+    javac submission/*.java -d upstream-output/
     
     # Create executable JAR file
     echo "Creating JAR file..."
-    cd compilation-output
+    cd upstream-output
     jar cfe app.jar InputReader InputReader.class
     cd ..
-    
+
     # List the prepared files
     echo "Prepared files:"
-    ls -la compilation-output/
+    ls -la upstream-output/
 
 task_parameters:
   execution_type: "jar"
-  execution_target: "compilation-output/app.jar"
+  execution_target: "upstream-output/app.jar"
   classpath: ""
   java_flags: ""
   execution_flags: ""

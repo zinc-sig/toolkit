@@ -5,8 +5,8 @@ parameters:
   - name: execution_binary
     type: string
     description: Path to binary including resource name
-    default: compilation-output/main
-    example: compilation-output/main
+    default: upstream-output/main
+    example: upstream-output/main
   - name: execution_flags
     type: string
     description: Command line arguments passed to the binary
