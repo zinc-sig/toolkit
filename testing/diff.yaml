@@ -4,6 +4,7 @@ image_resource:
   source:
     repository: busybox
 inputs:
+  - name: submission
   - name: upstream-output
     optional: true
   - name: assignment-assets
