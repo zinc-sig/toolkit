@@ -23,8 +23,11 @@ run:
   args:
     - '-c'
     - |
-      # Make ghost executable
-      chmod +x ghost/ghost-linux-amd64
+      # Detect architecture and set ghost binary path
+      # Maps x86_64 -> amd64, aarch64 -> arm64
+      GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+      GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+      chmod +x "$GHOST_BIN"
 
       # Determine compiler based on language
       if [ "${LANGUAGE}" = "cpp" ] || [ "${LANGUAGE}" = "c++" ]; then
@@ -34,7 +37,7 @@ run:
       fi
 
       # Compile with ghost
-      ./ghost/ghost-linux-amd64 run --verbose \
+      "$GHOST_BIN" run --verbose \
         -i /dev/null \
         -o compile.log \
         -e compile.err \
