@@ -301,8 +301,12 @@ fly -t <target> execute -c <task-file>.yaml \
 
 - Use appropriate Docker images for the language/tool
 - Include ghost as input when executing commands
-- Set executable permissions: `chmod +x ghost/ghost-linux-amd64`
-- Use ghost path: `./ghost/ghost-linux-amd64`
+- Use architecture detection for ghost binary:
+  ```bash
+  GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+  GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+  chmod +x "$GHOST_BIN"
+  ```
 - Handle errors gracefully
 - Create output directories as needed
 - Follow existing naming conventions

@@ -37,8 +37,11 @@ run:
     - |
       set -e
       
-      # Make ghost executable
-      chmod +x ghost/ghost-linux-amd64
+      # Detect architecture and set ghost binary path
+      # Maps x86_64 -> amd64, aarch64 -> arm64
+      GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+      GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+      chmod +x "$GHOST_BIN"
       
       # Set up Python path if specified
       if [ -n "${PYTHONPATH}" ]; then
@@ -90,7 +93,7 @@ run:
       echo "📂 PYTHONPATH: ${PYTHONPATH}"
       
       # Build ghost command with input redirection (required by ghost)
-      GHOST_CMD="./ghost/ghost-linux-amd64 run --verbose"
+      GHOST_CMD="$GHOST_BIN run --verbose"
       
       # Set input file - use specified file or /dev/null if none
       if [ -n "${INPUT_PATH}" ] && [ -f "${INPUT_PATH}" ]; then

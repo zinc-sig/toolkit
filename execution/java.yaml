@@ -30,8 +30,11 @@ run:
     - |
       set -e
       
-      # Make ghost executable
-      chmod +x ghost/ghost-linux-amd64
+      # Detect architecture and set ghost binary path
+      # Maps x86_64 -> amd64, aarch64 -> arm64
+      GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+      GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+      chmod +x "$GHOST_BIN"
       
       # Build classpath
       FULL_CLASSPATH=""
@@ -52,7 +55,7 @@ run:
       echo "Input: ${INPUT_PATH}"
       
       # Execute with ghost for stdio capture and upload
-      ./ghost/ghost-linux-amd64 run --verbose \
+      "$GHOST_BIN" run --verbose \
         -i "${INPUT_PATH}" \
         -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
         -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \

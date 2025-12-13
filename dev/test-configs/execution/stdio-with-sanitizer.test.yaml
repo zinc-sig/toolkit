@@ -301,8 +301,12 @@ variants:
               args:
                 - -c
                 - |
-                  chmod +x ghost/ghost-linux-amd64
-                  ./ghost/ghost-linux-amd64 run --verbose \
+                  # Detect architecture and set ghost binary path
+                  GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+                  GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+                  chmod +x "$GHOST_BIN"
+                  
+                  "$GHOST_BIN" run --verbose \
                     -i "${INPUT_PATH}" \
                     -o "execution-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
                     -e "execution-output/${STDERR_PATH}:${STDERR_PATH}" \

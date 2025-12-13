@@ -23,13 +23,16 @@ run:
   args:
     - -c
     - |
-      # Make ghost executable
-      chmod +x ghost/ghost-linux-amd64
+      # Detect architecture and set ghost binary path
+      # Maps x86_64 -> amd64, aarch64 -> arm64
+      GHOST_ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+      GHOST_BIN="ghost/ghost-linux-${GHOST_ARCH}"
+      chmod +x "$GHOST_BIN"
 
       # Run ghost diff command
       # Note: OUTPUT_PATH and STDERR_PATH should now be simple filenames or relative paths
       # as they will be uploaded directly to the configured bucket location
-      ./ghost/ghost-linux-amd64 diff --verbose \
+      "$GHOST_BIN" diff --verbose \
         -i "${INPUT_PATH}" \
         -x "${EXPECTED_PATH}" \
         -o "testing-output/${OUTPUT_PATH}:${OUTPUT_PATH}" \
